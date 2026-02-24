@@ -1,0 +1,11 @@
+Control ID,Control Name,Status
+SEC-01,Information Security Policy,Implemented
+SEC-02,Security Awareness Training,Implemented
+SEC-03,Access Control Policy,Implemented
+NET-01,Firewall Configurations,Implemented
+NET-02,Intrusion Detection System,Implemented
+CRY-01,Data Encryption at Rest,Implemented
+CRY-02,Data Encryption in Transit,Implemented
+IAM-01,Multi-Factor Authentication,Implemented
+IAM-02,Password Complexity,Implemented
+BCP-01,Disaster Recovery Plan,Implemented
