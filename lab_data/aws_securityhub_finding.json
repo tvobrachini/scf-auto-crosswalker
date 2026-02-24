@@ -1,0 +1,43 @@
+{
+    "Findings": [
+        {
+            "SchemaVersion": "2018-10-08",
+            "Id": "arn:aws:securityhub:us-east-1:123456789012:subscription/aws-foundational-security-best-practices/v/1.0.0/S3.8/finding/1234abcd-12ab-34cd-56ef-1234567890ab",
+            "ProductArn": "arn:aws:securityhub:us-east-1::product/aws/securityhub",
+            "GeneratorId": "aws-foundational-security-best-practices/v/1.0.0/S3.8",
+            "AwsAccountId": "123456789012",
+            "Types": [
+                "Software and Configuration Checks/Industry and Regulatory Standards/AWS Foundational Security Best Practices"
+            ],
+            "FirstObservedAt": "2023-10-27T14:00:00Z",
+            "LastObservedAt": "2023-10-27T14:00:00Z",
+            "CreatedAt": "2023-10-27T14:00:00Z",
+            "UpdatedAt": "2023-10-27T14:00:00Z",
+            "Severity": {
+                "Label": "HIGH",
+                "Normalized": 70
+            },
+            "Confidence": 95,
+            "Title": "S3.8 CloudFront distributions should require encryption in transit",
+            "Description": "This finding identifies CloudFront web distributions that allow unencrypted communications via the viewer protocol policy. To prevent data interception, CloudFront distributions should be configured to 'HTTPS Only' or 'Redirect HTTP to HTTPS'.",
+            "Remediation": {
+                "Recommendation": {
+                    "Text": "For information on configuring the viewer protocol policy for CloudFront distributions, refer to the Amazon CloudFront Developer Guide.",
+                    "Url": "https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/using-https-viewer-to-cloudfront.html"
+                }
+            },
+            "Resources": [
+                {
+                    "Type": "AwsCloudFrontDistribution",
+                    "Id": "arn:aws:cloudfront::123456789012:distribution/E1A2B3C4D5E6F7",
+                    "Partition": "aws",
+                    "Region": "global"
+                }
+            ],
+            "Compliance": {
+                "Status": "FAILED"
+            },
+            "RecordState": "ACTIVE"
+        }
+    ]
+}
