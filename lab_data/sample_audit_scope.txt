@@ -1,0 +1,12 @@
+## Audit Overview
+This audit will focus on the security surrounding our newly deployed Customer Portal Web Application (CPWA). The CPWA handles sensitive personally identifiable information (PII) including user names, addresses, and encrypted financial data.
+
+## In-Scope Systems
+1. AWS EC2 Web Servers running the frontend React application.
+2. AWS RDS PostgreSQL databases storing customer records.
+3. Employee access to the AWS Management Console used to administer the systems.
+
+## Primary Objectives
+1. Verify that all PII is encrypted both at rest within the databases and in transit between the web frontend and backend APIs.
+2. Ensure that strict Access Control and Identity Management (IAM) policies are enforced, specifically verifying that Multi-Factor Authentication (MFA) is strictly enforced for all developer access to the AWS environments.
+3. Review the system logging and monitoring configurations to ensure that unauthorized access attempts are immediately flagged and alerted to the Security Operations Center (SOC).

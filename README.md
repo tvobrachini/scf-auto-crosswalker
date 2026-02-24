@@ -6,12 +6,20 @@ Simply paste a raw IT policy, a procedure, or upload a Cloud Security finding (l
 
 ![Streamlit UI Demo](/home/tvobrachini/.gemini/antigravity/brain/8ea03ba3-cec0-49ed-a000-98417ec5d0ae/scf_mapping_complete_1771936245594.png)
 
-## 📌 Features
-- **Always Current Framework:** Connects directly to the SCF GitHub repository to automatically download and parse the ~1,400+ controls upon setup.
-- **AI Mapping Engine (Free & Fast):** Utilizes `LangChain` and structurally enforces JSON outputs from Llama-3 to find the absolute best matching domains and controls with a confidence score.
-- **Regulatory Extractor:** Automatically pulls over 30 related framework mappings for every single control (e.g., NIST CSF, SOC 2, HIPAA).
-- **Interactive UI:** Built using `Streamlit` to provide a clean, modern dashboard for testers or auditors to upload their evidence.
-- **Safe Lab Environment:** Includes a ready-to-test `lab_data/` directory with sample files so you can test the AI engine without risking real company data.
+## 📌 The GRC Assistant Suite
+This project features three distinct tools accessible via a clean sidebar navigation:
+
+### 1. 🔍 SCF Auto-Crosswalker
+Paste a raw IT policy, a procedure, or upload a massive Cloud Security JSON (e.g. AWS Security Hub findings), and the LLM engine will autonomously map it to the absolute best matching SCF domains and controls with a confidence score.
+- **📄 PDF Processing:** Upload massive PDF documents and have the AI parse and map the entire document.
+- **📥 CSV Exports:** Instantly export the AI mappings into an Excel-ready CSV for your compliance trackers (Drata, Vanta).
+- **⚙️ Custom Personas:** Force the AI to act specifically as a PCI-DSS QSA, FedRAMP Assessor, or GDPR DPO to tune the mappings.
+
+### 2. 🎯 Audit Scope Analyzer
+Upload a narrative Audit Scope Document (TXT/PDF) and the AI will strategically deduce which SCF Domains and specific baseline controls must be tested. Includes the AI's step-by-step reasoning.
+
+### 3. 📉 Compliance Gap Analyzer
+Upload a CSV listing your company's existing IT controls, select a target framework (e.g., SOC 2, HIPAA, GDPR), and instantly generate a checklist identifying exactly which baseline SCF controls are required to meet that framework.
 
 ## 🚀 Quickstart
 

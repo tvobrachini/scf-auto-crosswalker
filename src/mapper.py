@@ -18,8 +18,10 @@ class MappedControl(BaseModel):
     justification: str = Field(description="A concise 1-sentence justification for why this control matches the input.")
     regulations: dict = Field(default_factory=dict, description="Regulatory frameworks mapped to this control.")
 
-class MappingResult(BaseModel):
-    mappings: list[MappedControl] = Field(description="The top 3 most relevant SCF controls mapped to the input.")
+class ScopeRecommendation(BaseModel):
+    recommended_domains: list[str] = Field(description="List of major SCF Domains relevant to the audit scope.")
+    recommended_control_ids: list[str] = Field(description="List of specific SCF Control IDs recommended for testing based on the scope.")
+    reasoning: str = Field(description="A brief comprehensive explanation of why these areas were selected based on the scope.")
 
 def load_scf_database():
     """Loads the parsed JSON database of the SCF framework."""
@@ -106,6 +108,36 @@ def map_text_to_scf(input_text: str, top_k: int = 3, persona_prompt: str = None)
         if mapping.control_id in scf_dict:
             mapping.regulations = scf_dict[mapping.control_id].get("regulations", {})
             
+    return response
+
+def analyze_audit_scope(scope_text: str):
+    """
+    Takes an audit scope document/text and asks the LLM to recommend relevant SCF Domains and Controls to test.
+    """
+    scf_data = load_scf_database()
+    if not scf_data:
+        return None
+
+    llm = ChatGroq(temperature=0, model_name="llama-3.3-70b-versatile")
+    structured_llm = llm.with_structured_output(ScopeRecommendation)
+
+    # We need to give the LLM a highly condensed version of domains and descriptions
+    # to fit within the context, but let's give it the full list of domains at least.
+    unique_domains = list(set([c["domain"] for c in scf_data]))
+    domain_context = "Available SCF Domains: " + ", ".join(unique_domains)
+
+    prompt = ChatPromptTemplate.from_messages([
+        ("system", "You are an expert IT Auditor. Provide a strategic test plan based on the provided audit scope. Use the provided SCF Domains to guide your recommendations. Return a list of the highly relevant domains, 5-10 specific control IDs that must be tested, and a unified reasoning paragraph.\n\nContext:\n{domain_context}"),
+        ("user", "Audit Scope Document:\n\n{scope_text}")
+    ])
+
+    chain = prompt | structured_llm
+    
+    response = chain.invoke({
+        "domain_context": domain_context,
+        "scope_text": scope_text
+    })
+
     return response
 
 if __name__ == "__main__":
