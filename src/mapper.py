@@ -45,7 +45,7 @@ def construct_scf_context(scf_data):
     
     return "\n".join(condensed_list)
 
-def map_text_to_scf(input_text: str, top_k: int = 3):
+def map_text_to_scf(input_text: str, top_k: int = 3, persona_prompt: str = None):
     """
     Takes an input string (policy snippet or JSON dump) and asks the LLM 
     to map it to the top_k most relevant SCF controls.
@@ -54,13 +54,15 @@ def map_text_to_scf(input_text: str, top_k: int = 3):
     if not scf_data:
         return None
 
-    # We use Langchain's Groq integration to call Llama-3
-    # We enforce a structured output matching our Pydantic model
     llm = ChatGroq(temperature=0, model_name="llama-3.3-70b-versatile")
     structured_llm = llm.with_structured_output(MappingResult)
+    
+    base_persona = "You are an expert IT Auditor and GRC Engineer."
+    if persona_prompt:
+        base_persona = f"{base_persona} {persona_prompt}"
 
     prompt = ChatPromptTemplate.from_messages([
-        ("system", "You are an expert IT Auditor and GRC Engineer. Your task is to map the user's input (a policy snippet or a cloud security finding) to the most relevant controls from the Secure Controls Framework (SCF).\n\nHere is the SCF database:\n{scf_context}"),
+        ("system", f"{base_persona} Your task is to map the user's input (a policy snippet or a cloud security finding) to the most relevant controls from the Secure Controls Framework (SCF).\n\nHere is the SCF database:\n{{scf_context}}"),
         ("user", "Please map the following input to the top {top_k} most relevant SCF controls.\n\nINPUT:\n{input_text}")
     ])
 
