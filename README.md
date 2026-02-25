@@ -4,7 +4,7 @@ An open-source, AI-powered internal GRC tool designed to eliminate manual spread
 
 Simply paste a raw IT policy, a procedure, or upload a Cloud Security finding (like AWS Security Hub JSON), and the engine will autonomously map it to the **Secure Controls Framework (SCF)** and append all related compliance regulations (GDPR, SOC 2, ISO 27001, NIST, PCI).
 
-![Streamlit UI Demo](/home/tvobrachini/.gemini/antigravity/brain/8ea03ba3-cec0-49ed-a000-98417ec5d0ae/scf_mapping_complete_1771936245594.png)
+![Streamlit UI Demo](assets/ui_demo.png)
 
 ## 📌 The GRC Assistant Suite
 This project features three distinct tools accessible via a clean sidebar navigation:
