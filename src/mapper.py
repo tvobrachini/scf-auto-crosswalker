@@ -123,22 +123,24 @@ def analyze_audit_scope(scope_text: str):
     if not scf_data:
         return None
 
-    llm = ChatGroq(temperature=0, model_name="llama-3.3-70b-versatile")
+    llm = ChatGroq(temperature=0, model_name="llama-3.1-8b-instant")
     structured_llm = llm.with_structured_output(ScopeRecommendation)
 
-    # Provide the exact, valid IDs grouped by domain so the LLM doesn't hallucinate IDs.
-    domain_groups = {}
+    # Compress context to bypass strict Groq rate limits.
+    # Instead of passing 1,451 IDs, we just pass the Domain and its specific ID Prefix.
+    domain_prefixes = {}
     for c in scf_data:
-        domain_groups.setdefault(c["domain"], []).append(c["control_id"])
+        prefix = c["control_id"].split("-")[0]
+        domain_prefixes[c["domain"]] = prefix
         
     context_lines = []
-    for dom, ids in domain_groups.items():
-        context_lines.append(f"{dom}: {', '.join(ids)}")
+    for dom, prefix in domain_prefixes.items():
+        context_lines.append(f"{dom} (Prefix: {prefix}-)")
     
-    domain_context = "Available SCF Domains and their valid Control IDs:\n" + "\n".join(context_lines)
+    domain_context = "Available SCF Domains and their Control ID Prefixes:\n" + "\n".join(context_lines)
 
     prompt = ChatPromptTemplate.from_messages([
-        ("system", "You are an expert IT Auditor. Provide a strategic test plan based on the provided audit scope. Use the provided SCF Domains and valid Control IDs to guide your recommendations. You MUST ONLY recommend Control IDs that are explicitly listed in the Context. Do not invent or abbreviate IDs. Return a list of the highly relevant domains, 5-10 specific control IDs that must be tested (exact matches only), and a unified reasoning paragraph.\n\nContext:\n{domain_context}"),
+        ("system", "You are an expert IT Auditor. Provide a strategic test plan based on the provided audit scope. Use the provided SCF Domains to guide your recommendations. You MUST format the requested Control IDs using ONLY the EXACT prefix associated with the Domain, followed by a two or three digit number (e.g., 'CLD-01', 'CLD-02'). DO NOT include any additional text, descriptions, or punctuation in the control IDs list. Return a list of the highly relevant domains, 5-10 specific control IDs that must be tested (ONLY THE IDs), and a unified reasoning paragraph.\n\nContext:\n{domain_context}"),
         ("user", "Audit Scope Document:\n\n{scope_text}")
     ])
 
