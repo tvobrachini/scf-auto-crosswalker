@@ -13,6 +13,61 @@ from mapper import map_text_to_scf, analyze_audit_scope
 
 st.set_page_config(page_title="GRC Assistant", page_icon="🛡️", layout="wide")
 
+# --- Custom CSS for Premium Look ---
+st.markdown("""
+<style>
+    /* Main Layout */
+    .stApp {
+        background-color: #0a0a0a;
+        color: #ededed;
+        font-family: 'Inter', sans-serif;
+    }
+    
+    /* Headers & Text */
+    h1, h2, h3 {
+        color: #ffffff !important;
+        font-weight: 700 !important;
+        letter-spacing: -0.02em;
+    }
+    
+    /* Sidebar Styling */
+    [data-testid="stSidebar"] {
+        background-color: #121212 !important;
+        border-right: 1px solid rgba(255,255,255,0.05);
+    }
+    
+    /* Buttons */
+    .stButton>button {
+        background: linear-gradient(135deg, #8A05BE 0%, #4338ca 100%);
+        color: white;
+        border: none;
+        border-radius: 8px;
+        padding: 0.5rem 1rem;
+        font-weight: 500;
+        transition: all 0.3s ease;
+    }
+    .stButton>button:hover {
+        opacity: 0.9;
+        transform: translateY(-1px);
+        box-shadow: 0 4px 12px rgba(138,5,190,0.3);
+    }
+    
+    /* Dataframes/Tables */
+    [data-testid="stDataFrame"] {
+        border-radius: 8px;
+        overflow: hidden;
+        border: 1px solid rgba(255,255,255,0.1);
+    }
+    
+    /* File Uploader */
+    [data-testid="stFileUploader"] {
+        border: 1px dashed rgba(138,5,190,0.4);
+        border-radius: 8px;
+        background-color: rgba(255,255,255,0.02);
+    }
+</style>
+""", unsafe_allow_html=True)
+
 # --- Sidebar Navigation & Setup ---
 with st.sidebar:
     st.title("🛡️ Secure Controls Framework (SCF)")
@@ -162,14 +217,21 @@ if app_mode == "🔍 SCF Auto-Crosswalker":
         elif not os.path.exists(PARSED_JSON_FILE):
             st.error("SCF Database not found.")
         else:
+            with open(PARSED_JSON_FILE, 'r', encoding='utf-8') as f:
+                full_scf_db = json.load(f)
+            scf_dict = {c["control_id"]: c for c in full_scf_db}
+                
             results_data = [] 
+            aggregated_controls = {}
+            
             with st.spinner(f"AI Engine is actively scanning and cross-referencing {len(texts_to_process)} inputs against the SCF..."):
                 progress_bar = st.progress(0)
                 for idx, text_block in enumerate(texts_to_process):
                     try:
                         mapping_result = map_text_to_scf(text_block, top_k=3, persona_prompt=persona_prompt)
                         if is_batch:
-                            st.markdown(f"**Finding #{idx+1} Mapped:**")
+                            st.write(f"Analyzed finding #{idx+1}...")
+                            
                         if mapping_result and mapping_result.mappings:
                             if not is_batch:
                                 st.success("Mapping Complete!")
@@ -177,34 +239,94 @@ if app_mode == "🔍 SCF Auto-Crosswalker":
                                 
                             for m_idx, mapping in enumerate(mapping_result.mappings):
                                 confidence = mapping.confidence
-                                results_data.append({
-                                    "Finding Index": idx + 1,
-                                    "Input Outline": text_block[:60] + "...",
-                                    "SCF Control ID": mapping.control_id,
-                                    "SCF Domain": mapping.domain,
-                                    "Confidence (%)": confidence,
-                                    "AI Justification": mapping.justification
-                                })
                                 
-                                with st.expander(f"Top Result #{m_idx+1} | {mapping.control_id} - Domain: {mapping.domain} | Confidence: {confidence}%", expanded=(not is_batch)):
-                                    st.markdown(f"**AI Justification:** {mapping.justification}")
-                                    st.progress(confidence / 100.0)
-                                    if mapping.regulations:
-                                        st.markdown("#### Corresponding Regulatory Mappings")
-                                        regs = list(mapping.regulations.keys())
-                                        priority = ['gdpr', 'iso', 'nist', 'soc', 'pci', 'ccpa', 'hipaa']
-                                        display_regs = {r:v for r,v in mapping.regulations.items() if any(p in r.lower() for p in priority)}
-                                        other_regs = len(mapping.regulations) - len(display_regs)
-                                        if display_regs:
-                                            st.write("🔥 **Priority Framework Mappings:**")
-                                            for r, v in display_regs.items():
-                                                st.markdown(f"- **{r}:** {v}")
-                                        if other_regs > 0:
-                                            st.caption(f"*(+{other_regs} minor framework mappings generated in CSV export)*")
+                                if is_batch:
+                                    cid = mapping.control_id
+                                    if cid not in aggregated_controls:
+                                        weight = scf_dict.get(cid, {}).get("weight", 1)
+                                        aggregated_controls[cid] = {
+                                            "SCF Control ID": cid,
+                                            "SCF Domain": mapping.domain,
+                                            "Control Description": mapping.description,
+                                            "Weight": weight,
+                                            "Hit Count": 0,
+                                            "Total Confidence": 0,
+                                            "Sample Justification": mapping.justification,
+                                            "Regulations": mapping.regulations
+                                        }
+                                    aggregated_controls[cid]["Hit Count"] += 1
+                                    aggregated_controls[cid]["Total Confidence"] += confidence
+                                else:
+                                    results_data.append({
+                                        "Finding Index": idx + 1,
+                                        "Input Outline": text_block[:60] + "...",
+                                        "SCF Control ID": mapping.control_id,
+                                        "SCF Domain": mapping.domain,
+                                        "Control Description": mapping.description,
+                                        "Confidence (%)": confidence,
+                                        "AI Justification": mapping.justification
+                                    })
+                                    
+                                    with st.expander(f"Top Result #{m_idx+1} | {mapping.control_id} - Domain: {mapping.domain} | Confidence: {confidence}%", expanded=True):
+                                        st.markdown(f"**Control Description:** {mapping.description}")
+                                        st.markdown(f"**AI Justification:** {mapping.justification}")
+                                        st.progress(confidence / 100.0)
+                                        if mapping.regulations:
+                                            st.markdown("#### Corresponding Regulatory Mappings")
+                                            priority = ['gdpr', 'iso', 'nist', 'soc', 'pci', 'ccpa', 'hipaa']
+                                            display_regs = {r:v for r,v in mapping.regulations.items() if any(p in r.lower() for p in priority)}
+                                            other_regs = len(mapping.regulations) - len(display_regs)
+                                            if display_regs:
+                                                st.write("🔥 **Priority Framework Mappings:**")
+                                                for r, v in display_regs.items():
+                                                    st.markdown(f"- **{r}:** {v}")
+                                            if other_regs > 0:
+                                                st.caption(f"*(+{other_regs} minor framework mappings generated in CSV export)*")
                     except Exception as e:
                         st.error(f"Error mapping input #{idx+1}: {e}")
                     progress_bar.progress((idx + 1) / len(texts_to_process))
                     
+            if is_batch:
+                for cid, data in aggregated_controls.items():
+                    data["Average Confidence (%)"] = round(data["Total Confidence"] / data["Hit Count"])
+                    # Compute a Priority Score: Weight * Hit Count
+                    data["Priority Score"] = data["Weight"] * data["Hit Count"]
+                    
+                sorted_controls = sorted(aggregated_controls.values(), key=lambda x: x["Priority Score"], reverse=True)
+                top_controls = sorted_controls # Return all priority deductive controls
+                
+                st.success("Batch Mapping Complete!")
+                st.markdown(f"### 🎯 All {len(top_controls)} Priority Controls")
+                st.info(f"Analyzed {len(texts_to_process)} separate findings and consolidated them into the highest priority controls based on SCF Weighting and frequency. (Duplicates Removed)")
+                
+                for m_idx, data in enumerate(top_controls):
+                    results_data.append({
+                        "SCF Control ID": data["SCF Control ID"],
+                        "SCF Domain": data["SCF Domain"],
+                        "Control Description": data["Control Description"],
+                        "Priority Score": data["Priority Score"],
+                        "Hit Count": data["Hit Count"],
+                        "Average Confidence (%)": data["Average Confidence (%)"],
+                        "Weight": data["Weight"],
+                        "Sample AI Justification": data["Sample Justification"]
+                    })
+                    
+                    with st.expander(f"Priority #{m_idx+1} | {data['SCF Control ID']} (Score: {data['Priority Score']}) | Hits: {data['Hit Count']}", expanded=(m_idx < 3)):
+                        st.markdown(f"**Control Description:** {data['Control Description']}")
+                        st.markdown(f"**Sample AI Justification:** {data['Sample Justification']}")
+                        st.progress(data["Average Confidence (%)"] / 100.0)
+                        if data["Regulations"]:
+                            st.markdown("#### Corresponding Regulatory Mappings")
+                            priority = ['gdpr', 'iso', 'nist', 'soc', 'pci', 'ccpa', 'hipaa']
+                            display_regs = {r:v for r,v in data["Regulations"].items() if any(p in r.lower() for p in priority)}
+                            other_regs = len(data["Regulations"]) - len(display_regs)
+                            if display_regs:
+                                st.write("🔥 **Priority Framework Mappings:**")
+                                for r, v in display_regs.items():
+                                    st.markdown(f"- **{r}:** {v}")
+                            if other_regs > 0:
+                                st.caption(f"*(+{other_regs} minor framework mappings generated in CSV export)*")
+
             if results_data:
                 st.markdown("---")
                 df = pd.DataFrame(results_data)
@@ -254,7 +376,13 @@ elif app_mode == "🎯 Audit Scope Analyzer":
     if colbtn2.button("🎯 Analyze Scope and Recommend Controls", type="primary", use_container_width=True, key="scope_btn"):
         if not scope_text:
             st.warning("Please provide scope text to analyze.")
+        elif not os.path.exists(PARSED_JSON_FILE):
+            st.error("JSON Framework Database missing. Please fetch the data using the sidebar.")
         else:
+            with open(PARSED_JSON_FILE, 'r', encoding='utf-8') as f:
+                full_scf_db = json.load(f)
+            scf_dict = {c["control_id"]: c for c in full_scf_db}
+            
             with st.spinner("AI is determining audit boundaries and expected controls..."):
                 try:
                     recommendation = analyze_audit_scope(scope_text)
@@ -270,8 +398,32 @@ elif app_mode == "🎯 Audit Scope Analyzer":
                                 st.markdown(f"- {dom}")
                         with colRes2:
                             st.markdown("### 📋 Recommended Controls to Test")
+                            
+                            # Helper function to do a fuzzy fallback lookup
+                            def get_control_data(target_cid):
+                                if target_cid in scf_dict:
+                                    return target_cid, scf_dict[target_cid]
+                                # Fallback: LLM sometimes emits "AC-1" instead of "IAC-01" or "AC-01"
+                                target_clean = target_cid.upper().replace("-", "").replace(" ", "")
+                                for db_id, data in scf_dict.items():
+                                    db_clean = db_id.upper().replace("-", "").replace(" ", "")
+                                    if target_clean in db_clean or db_clean in target_clean:
+                                        return db_id, data
+                                return target_cid, {}
+
                             for cid in recommendation.recommended_control_ids:
-                                st.markdown(f"- **{cid}**")
+                                actual_id, control_data = get_control_data(cid)
+                                desc = control_data.get("description", "Description not found. (The AI recommended a control ID that does not map perfectly to the 2025 SCF Database).")
+                                erl = control_data.get("erl", "")
+                                question = control_data.get("question", "")
+                                
+                                display_id = actual_id if actual_id != cid else cid
+                                with st.expander(f"**{display_id}** (Predicted: {cid})", expanded=False):
+                                    st.markdown(f"**Control Description:** {desc}")
+                                    if erl:
+                                        st.markdown(f"**Evidence Request List (ERL):** {erl}")
+                                    if question:
+                                        st.markdown(f"**Walkthrough Question:** {question}")
                 except Exception as e:
                     st.error(f"Error during scope analysis: {e}")
 
@@ -349,9 +501,11 @@ elif app_mode == "📉 Compliance Gap Analyzer":
                     if len(required_scf) > 0:
                         # Convert required scf to dataframe for easy viewing
                         df_req = pd.DataFrame([{
-                            "Required Control ID": rc["control_id"], 
-                            "Domain": rc["domain"],
-                            "Description": rc["description"][:100] + "..."
+                            "Required Control ID": rc.get("control_id", ""), 
+                            "Domain": rc.get("domain", ""),
+                            "Description": rc.get("description", ""),
+                            "Evidence Request List (ERL)": rc.get("erl", ""),
+                            "Control Question": rc.get("question", "")
                         } for rc in required_scf])
                         
                         st.markdown("### ⚠️ Gap Profile Breakdown")

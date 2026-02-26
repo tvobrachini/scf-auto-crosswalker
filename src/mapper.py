@@ -16,10 +16,15 @@ class MappedControl(BaseModel):
     domain: str = Field(description="The primary SCF Domain")
     confidence: int = Field(description="Confidence score from 0 to 100")
     justification: str = Field(description="A concise 1-sentence justification for why this control matches the input.")
+    description: str = Field(default="", description="The full text description of the control from the SCF database.")
     regulations: dict = Field(default_factory=dict, description="Regulatory frameworks mapped to this control.")
+
+class MappingResult(BaseModel):
+    mappings: list[MappedControl] = Field(description="A list of the top recommended SCF controls.")
 
 class ScopeRecommendation(BaseModel):
     recommended_domains: list[str] = Field(description="List of major SCF Domains relevant to the audit scope.")
+
     recommended_control_ids: list[str] = Field(description="List of specific SCF Control IDs recommended for testing based on the scope.")
     reasoning: str = Field(description="A brief comprehensive explanation of why these areas were selected based on the scope.")
 

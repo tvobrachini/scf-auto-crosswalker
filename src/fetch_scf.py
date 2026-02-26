@@ -80,13 +80,16 @@ def parse_scf():
         id_col = next((col for col in df.columns if 'scf #' in str(col).lower()), None)
         domain_col = next((col for col in df.columns if 'domain' in str(col).lower() and 'scf' in str(col).lower()), None)
         desc_col = next((col for col in df.columns if 'description' in str(col).lower() and 'control' in str(col).lower()), None)
+        weight_col = next((col for col in df.columns if 'relative control weighting' in str(col).lower()), None)
+        erl_col = next((col for col in df.columns if 'evidence request list' in str(col).lower()), None)
+        question_col = next((col for col in df.columns if 'scf control question' in str(col).lower()), None)
         
         if not id_col or not desc_col:
             print("[-] Could not find required columns in the Excel file.")
             print(f"Available columns: {df.columns.tolist()[:10]}")
             return False
 
-        print(f"[+] Found columns: ID='{id_col}', Domain='{domain_col}', Description='{desc_col}'")
+        print(f"[+] Found columns: ID='{id_col}', Domain='{domain_col}', Description='{desc_col}', Weight='{weight_col}'")
         
         # Identify key regulatory columns (ISO, NIST, SOC 2, GDPR, CCPA, HIPAA, PCI)
         # We search the column names for these keywords to dynamically find them
@@ -101,16 +104,36 @@ def parse_scf():
 
         # Filter and clean
         cols_to_keep = [id_col, domain_col, desc_col] + reg_cols
+        if weight_col:
+            cols_to_keep.append(weight_col)
+        if erl_col:
+            cols_to_keep.append(erl_col)
+        if question_col:
+            cols_to_keep.append(question_col)
+            
         cleaned_df = df[cols_to_keep].copy()
         cleaned_df = cleaned_df.dropna(subset=[id_col, desc_col])
         
         # Convert to dictionary format
         records = []
         for _, row in cleaned_df.iterrows():
+            weight_val = row[weight_col] if weight_col and pd.notna(row[weight_col]) else 1
+            # SCF usually has weights from 1 to 10
+            try:
+                weight_val = int(weight_val)
+            except:
+                weight_val = 1
+                
+            erl_val = row[erl_col] if erl_col and pd.notna(row[erl_col]) else ""
+            question_val = row[question_col] if question_col and pd.notna(row[question_col]) else ""
+
             record = {
                 "control_id": row[id_col],
                 "domain": row[domain_col],
                 "description": row[desc_col],
+                "weight": weight_val,
+                "erl": str(erl_val).strip(),
+                "question": str(question_val).strip(),
                 "regulations": {}
             }
             # Add regulations if they are not NaN
