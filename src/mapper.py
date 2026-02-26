@@ -126,13 +126,19 @@ def analyze_audit_scope(scope_text: str):
     llm = ChatGroq(temperature=0, model_name="llama-3.3-70b-versatile")
     structured_llm = llm.with_structured_output(ScopeRecommendation)
 
-    # We need to give the LLM a highly condensed version of domains and descriptions
-    # to fit within the context, but let's give it the full list of domains at least.
-    unique_domains = list(set([c["domain"] for c in scf_data]))
-    domain_context = "Available SCF Domains: " + ", ".join(unique_domains)
+    # Provide the exact, valid IDs grouped by domain so the LLM doesn't hallucinate IDs.
+    domain_groups = {}
+    for c in scf_data:
+        domain_groups.setdefault(c["domain"], []).append(c["control_id"])
+        
+    context_lines = []
+    for dom, ids in domain_groups.items():
+        context_lines.append(f"{dom}: {', '.join(ids)}")
+    
+    domain_context = "Available SCF Domains and their valid Control IDs:\n" + "\n".join(context_lines)
 
     prompt = ChatPromptTemplate.from_messages([
-        ("system", "You are an expert IT Auditor. Provide a strategic test plan based on the provided audit scope. Use the provided SCF Domains to guide your recommendations. Return a list of the highly relevant domains, 5-10 specific control IDs that must be tested, and a unified reasoning paragraph.\n\nContext:\n{domain_context}"),
+        ("system", "You are an expert IT Auditor. Provide a strategic test plan based on the provided audit scope. Use the provided SCF Domains and valid Control IDs to guide your recommendations. You MUST ONLY recommend Control IDs that are explicitly listed in the Context. Do not invent or abbreviate IDs. Return a list of the highly relevant domains, 5-10 specific control IDs that must be tested (exact matches only), and a unified reasoning paragraph.\n\nContext:\n{domain_context}"),
         ("user", "Audit Scope Document:\n\n{scope_text}")
     ])
 
