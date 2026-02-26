@@ -411,19 +411,53 @@ elif app_mode == "🎯 Audit Scope Analyzer":
                                         return db_id, data
                                 return target_cid, {}
 
+                            controls_data = []
+                            questions_data = []
+                            requests_data = []
+
                             for cid in recommendation.recommended_control_ids:
                                 actual_id, control_data = get_control_data(cid)
                                 desc = control_data.get("description", "Description not found. (The AI recommended a control ID that does not map perfectly to the 2025 SCF Database).")
+                                weight = control_data.get("weight", 1)
                                 erl = control_data.get("erl", "")
                                 question = control_data.get("question", "")
                                 
                                 display_id = actual_id if actual_id != cid else cid
-                                with st.expander(f"**{display_id}** (Predicted: {cid})", expanded=False):
-                                    st.markdown(f"**Control Description:** {desc}")
-                                    if erl:
-                                        st.markdown(f"**Evidence Request List (ERL):** {erl}")
-                                    if question:
-                                        st.markdown(f"**Walkthrough Question:** {question}")
+                                
+                                controls_data.append({
+                                    "Control ID": display_id,
+                                    "Description": desc,
+                                    "Weight": weight
+                                })
+                                questions_data.append({
+                                    "Control ID": display_id,
+                                    "Walkthrough Question": question
+                                })
+                                requests_data.append({
+                                    "Evidence Request List ID": erl,
+                                    "Related Controls": display_id,
+                                    "Request Content": f"Please provide evidence demonstrating: {desc}" if erl else "N/A"
+                                })
+
+                            df_controls = pd.DataFrame(controls_data)
+                            st.dataframe(df_controls, use_container_width=True)
+                            
+                            # Generate Excel File in memory
+                            import io
+                            excel_buf = io.BytesIO()
+                            with pd.ExcelWriter(excel_buf, engine='openpyxl') as writer:
+                                df_controls.to_excel(writer, sheet_name='Controls to Audit', index=False)
+                                pd.DataFrame(questions_data).to_excel(writer, sheet_name='Questions', index=False)
+                                pd.DataFrame(requests_data).to_excel(writer, sheet_name='Request List', index=False)
+                            excel_data = excel_buf.getvalue()
+
+                            st.download_button(
+                                label="📥 Download Audit Scope Plan (Excel)",
+                                data=excel_data,
+                                file_name='audit_scope_plan.xlsx',
+                                mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                                use_container_width=True
+                            )
                 except Exception as e:
                     st.error(f"Error during scope analysis: {e}")
 
