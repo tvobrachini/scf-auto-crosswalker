@@ -8,12 +8,12 @@ load_dotenv()
 # Ensure the src directory is available for imports
 sys.path.append(os.path.join(os.path.dirname(__file__), "src"))
 
-import streamlit as st
-import json
-import pandas as pd
-import pdfplumber
-from fetch_scf import PARSED_JSON_FILE, download_scf, parse_scf
-from mapper import map_text_to_scf
+import streamlit as st  # noqa: E402
+import json  # noqa: E402
+import pandas as pd  # noqa: E402
+import pdfplumber  # noqa: E402
+from fetch_scf import PARSED_JSON_FILE, download_scf, parse_scf  # noqa: E402
+from mapper import map_text_to_scf  # noqa: E402
 
 st.set_page_config(page_title="GRC Assistant", page_icon="🛡️", layout="wide")
 
