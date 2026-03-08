@@ -22,7 +22,7 @@ jobs:
       run: |
         python -m pip install --upgrade pip
         pip install uv
-        uv pip install --system -r requirements.txt
+        uv sync --all-extras
         uv pip install --system pytest ruff bandit
 
     - name: Lint with Ruff
@@ -35,5 +35,11 @@ jobs:
         bandit -c pyproject.toml -r .
 
     - name: Run Pytest Suite
+      env:
+        PYTHONPATH: .
       run: |
         pytest tests/ -v
+
+    - name: Verify Docker Container Build
+      run: |
+        docker build -t scf-app-test .

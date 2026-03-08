@@ -1,3 +1,24 @@
+[project]
+name = "scf-auto-crosswalker"
+version = "0.1.0"
+description = "AI-Driven SCF Crosswalker"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "pandas==2.2.0",
+    "openpyxl==3.1.2",
+    "requests==2.31.0",
+    "streamlit==1.31.0",
+    "python-dotenv==1.0.1",
+    "langchain>=0.2.0",
+    "langchain-groq>=0.1.0",
+    "langchain-core>=0.2.0",
+    "langchain-openai>=0.1.0",
+    "langgraph>=0.1.0",
+    "pydantic>=2.7.0",
+    "pdfplumber>=0.10.3",
+]
+
 [tool.bandit]
 exclude_dirs = ["tests", ".venv"]
 skips = ["B101"] # Skip assert usage checks because they are heavily used in tests/pytest
