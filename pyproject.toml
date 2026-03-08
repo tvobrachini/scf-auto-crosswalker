@@ -22,3 +22,10 @@ dependencies = [
 [tool.bandit]
 exclude_dirs = ["tests", ".venv"]
 skips = ["B101"] # Skip assert usage checks because they are heavily used in tests/pytest
+
+[dependency-groups]
+dev = [
+    "bandit>=1.9.4",
+    "pytest>=9.0.2",
+    "ruff>=0.15.5",
+]
