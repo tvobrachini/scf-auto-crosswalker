@@ -1,14 +1,14 @@
 # Case Study: Automating IT compliance with AI
 
-**Role:** IT Audit Specialist / GRC Engineer  
-**Core Technologies:** Python, Streamlit, LangChain, Groq LLM (Llama-3), Pytest, CI/CD  
-**Frameworks Covered:** Secure Controls Framework (SCF), SOC 2, ISO 27001, PCI-DSS  
+**Role:** IT Audit Specialist / GRC Engineer
+**Core Technologies:** Python, Streamlit, LangChain, Groq LLM (Llama-3), Pytest, CI/CD
+**Frameworks Covered:** Secure Controls Framework (SCF), SOC 2, ISO 27001, PCI-DSS
 
 ---
 
 ## 🛑 The Problem
 
-Governance, Risk, and Compliance (GRC) teams face a massive operational bottleneck during audits: **The Mapping Problem**. 
+Governance, Risk, and Compliance (GRC) teams face a massive operational bottleneck during audits: **The Mapping Problem**.
 
 Whether dealing with a raw IT policy written by a developer, or a massive JSON dump of hundreds of AWS Security Hub findings, auditors must manually read each finding, cross-reference it against a spreadsheet of thousands of baseline controls (like the 1,400+ controls in the Secure Controls Framework), and determine applicability.
 
@@ -24,16 +24,16 @@ This manual mapping leads to human error, cognitive fatigue, and massive delays 
 
 ## 🏗️ The Solution: "Audit Engineering" & Automation
 
-I built **SCF Auto-Crosswalker** to fundamentally solve this bottleneck using Large Language Models (LLMs) and structured data extraction. 
+I built **SCF Auto-Crosswalker** to fundamentally solve this bottleneck using Large Language Models (LLMs) and structured data extraction.
 
 Instead of manual spreadsheet gymnastics, the tool acts as an autonomous GRC assistant. It ingests unstructured text, policies, or complex Cloud Security JSONs and strategically routes them to the correct SCF controls, exporting the results directly into an audit-ready format.
 
 ### Architectural Decisions:
-1. **Model Selection (Llama-3 via Groq):** 
-   - *Decision:* Used Groq's LPU acceleration with Llama-3-70b. 
+1. **Model Selection (Llama-3 via Groq):**
+   - *Decision:* Used Groq's LPU acceleration with Llama-3-70b.
    - *Why:* Speed is paramount. Mapping hundreds of AWS findings needs to happen fast. Groq provides near-instantaneous token generation.
-2. **Framework Alignment (SCF):** 
-   - *Decision:* Anchored the AI logic to the Secure Controls Framework (SCF). 
+2. **Framework Alignment (SCF):**
+   - *Decision:* Anchored the AI logic to the Secure Controls Framework (SCF).
    - *Why:* The SCF is the gold standard for harmonizing fragmented IT regulations. If the AI maps a finding to the SCF, it automatically inherits the mappings to SOC 2, CMMC, GDPR, and ISO.
 3. **Structured Outputs (Pydantic / LangChain):**
    - *Decision:* Forced the LLM to output rigid Pydantic JSON schemas.
@@ -46,7 +46,7 @@ Instead of manual spreadsheet gymnastics, the tool acts as an autonomous GRC ass
 
 ## 📈 The Impact
 
-While standard GRC functions rely heavily on manual tracking, shifting to an AI-driven mapping model provides significant operational ROI. 
+While standard GRC functions rely heavily on manual tracking, shifting to an AI-driven mapping model provides significant operational ROI.
 
 According to industry benchmarks from reports by Thomson Reuters and ZenGRC, organizations adopting AI-powered GRC automation experience:
 - **Up to a 50-70% reduction** in audit preparation and evidence-gathering time.

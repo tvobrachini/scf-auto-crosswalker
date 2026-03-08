@@ -56,7 +56,7 @@ TSC 2017:2022 (used for SOC 2)
 APEC
 Privacy Framework
 2015
-BSI 
+BSI
 Standard 200-1
 CIS
 CSC
@@ -111,14 +111,14 @@ ISO
 ISO
 27002
 2022
-ISO 
+ISO
 27017
 2015
-ISO 
+ISO
 27018
 2014
 ISO
-27701 
+27701
 2025
 ISO
 29100
@@ -135,7 +135,7 @@ ISO
 MITRE
 ATT&CK
 10
-MPA 
+MPA
 Content Security Program
 5.1
 NAIC
@@ -148,7 +148,7 @@ AI 600-1
 NIST Privacy Framework
 1.0
 NIST
-800-37 
+800-37
 R2
 NIST
 800-39
@@ -186,7 +186,7 @@ NIST
 800-63B
 NIST
 800-82 R3
-LOW 
+LOW
 OT Overlay
 NIST
 800-82 R3
@@ -194,7 +194,7 @@ MODERATE
 OT Overlay
 NIST
 800-82 R3
-HIGH 
+HIGH
 OT Overlay
 NIST
 800-160
@@ -270,7 +270,7 @@ SAQ D Service Provider
 PCI DSS
 4.0.1
 SAQ P2PE
-Shared Assessments SIG 
+Shared Assessments SIG
 2025
 SPARTA
 SWIFT
@@ -359,16 +359,16 @@ US
 FedRAMP
 R4
 US
-FedRAMP R4 
+FedRAMP R4
 (low)
 US
-FedRAMP R4 
+FedRAMP R4
 (moderate)
 US
-FedRAMP R4 
+FedRAMP R4
 (high)
 US
-FedRAMP R4 
+FedRAMP R4
 (LI-SaaS)
 US
 FedRAMP
@@ -409,15 +409,15 @@ US
 HIPAA
 Security Rule / NIST SP 800-66 R2
 US
-HIPAA 
+HIPAA
 HICP
 Small Practice
 US
-HIPAA 
+HIPAA
 HICP
 Medium Practice
 US
-HIPAA 
+HIPAA
 HICP
 Large Practice
 US
@@ -442,7 +442,7 @@ Cybersecurity Rule
 US
 SOX
 US
-SSA 
+SSA
 EIESR
 8.0
 US
@@ -719,7 +719,7 @@ Philippines
 APAC
 Singapore
 APAC
-Singapore 
+Singapore
 Cyber Hygiene Practice
 APAC
 Singapore MAS
@@ -786,7 +786,7 @@ AI-Enabled Operations
 SCF CORE
 AI Model
 Deployment
-Minimum Security Requirements 
+Minimum Security Requirements
 MCR + DSR
 Identify
 Minimum Compliance Requirements (MCR)
