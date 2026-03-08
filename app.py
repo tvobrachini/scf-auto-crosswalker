@@ -1,15 +1,22 @@
 import os
 import sys
+from dotenv import load_dotenv
+
+# Load .env variables (picks up GROQ_API_KEY, OPENAI_API_KEY, etc.)
+load_dotenv()
 
 # Ensure the src directory is available for imports
 sys.path.append(os.path.join(os.path.dirname(__file__), 'src'))
 
 import streamlit as st
 import json
+import uuid
 import pandas as pd
 import pdfplumber
 from fetch_scf import RAW_SCF_FILE, PARSED_JSON_FILE, download_scf, parse_scf
-from mapper import map_text_to_scf, analyze_audit_scope
+from mapper import map_text_to_scf
+from swarm.graph import app as swarm_app
+from swarm.session_manager import save_session, list_sessions, delete_session
 
 st.set_page_config(page_title="GRC Assistant", page_icon="🛡️", layout="wide")
 
@@ -114,6 +121,28 @@ with st.sidebar:
         persona_prompt = None if "None" in selected_persona else selected_persona
     else:
         persona_prompt = None
+
+    # ----- Audit History Section -----
+    if app_mode == "🎯 Audit Scope Analyzer":
+        st.markdown("---")
+        st.header("🗂️ Audit History")
+        sessions = list_sessions()
+        if sessions:
+            for tid, meta in sessions.items():
+                c1, c2 = st.columns([4, 1])
+                label = f"📂 **{meta['name']}**  \n`{meta['created_at'][:10]}`"
+                if c1.button(label, key=f"load_{tid}", use_container_width=True):
+                    # Load this thread into session state
+                    st.session_state.thread_id = tid
+                    st.session_state.scope_submitted = True
+                    # Restore chat history from saved session
+                    st.session_state.chat_history = meta.get("chat_history", [])
+                    st.rerun()
+                if c2.button("🗑️", key=f"del_{tid}", help="Delete audit"):
+                    delete_session(tid)
+                    st.rerun()
+        else:
+            st.caption("No saved audits yet.")
 
     st.markdown("---")
     st.info("Licensed under CC Attribution-NoDerivatives 4.0. Data provided by securecontrolsframework.com")
@@ -339,127 +368,198 @@ if app_mode == "🔍 SCF Auto-Crosswalker":
 # ==========================================
 # TOOL 2: Audit Scope Analyzer
 # ==========================================
+# ==========================================
+# TOOL 2: Audit Scope Analyzer (Stateful Swarm)
+# ==========================================
 elif app_mode == "🎯 Audit Scope Analyzer":
-    st.title("🎯 Audit Scope Analyzer")
-    st.markdown("Predict which SCF controls must be tested based on a narrative audit scope document.")
+    st.title("🎯 Swarm Audit Command Center")
+    st.markdown("Interact directly with the Multi-Agent LangGraph Swarm to analyze the scope, research risks, and design controls.")
     
+    import uuid
+    if "thread_id" not in st.session_state:
+        st.session_state.thread_id = str(uuid.uuid4())
+    if "chat_history" not in st.session_state:
+        st.session_state.chat_history = []
+    if "scope_submitted" not in st.session_state:
+        st.session_state.scope_submitted = False
+    if "scope_text_cache" not in st.session_state:
+        st.session_state.scope_text_cache = ""
+
+    config = {"configurable": {"thread_id": st.session_state.thread_id}}
+
     scope_text = ""
-    colA, colB = st.columns([1, 1])
-    with colA:
-        st.markdown("### Upload Scope Document")
-        uploaded_scope = st.file_uploader("Upload PDF or TXT Scope", type=['pdf', 'txt'], key="scope_up")
-        if uploaded_scope:
-            if uploaded_scope.name.endswith('.pdf'):
-                with pdfplumber.open(uploaded_scope) as pdf:
-                    scope_text = "\n".join([page.extract_text() for page in pdf.pages if page.extract_text()])
+    if not st.session_state.scope_submitted:
+        colA, colB = st.columns([1, 1])
+        with colA:
+            st.markdown("### Upload Scope Document")
+            uploaded_scope = st.file_uploader("Upload PDF or TXT Scope", type=['pdf', 'txt'], key="scope_up")
+            if uploaded_scope:
+                if uploaded_scope.name.endswith('.pdf'):
+                    with pdfplumber.open(uploaded_scope) as pdf:
+                        scope_text = "\\n".join([page.extract_text() for page in pdf.pages if page.extract_text()])
+                else:
+                    scope_text = uploaded_scope.getvalue().decode("utf-8")
+                    
+            # Lab integration
+            lab_txt = load_lab_files(extension='.txt')
+            selected_lab = st.selectbox("Or select Lab Data", ["None"] + lab_txt, key="scope_lab")
+            if selected_lab != "None" and not scope_text:
+                with open(os.path.join(LAB_DATA_DIR, selected_lab), 'r', encoding='utf-8') as f:
+                    scope_text = f.read()
+
+        with colB:
+            st.markdown("### Scope Document Preview")
+            if scope_text:
+                st.text_area("Scope Content (Editable)", value=scope_text, height=180, key="scope_text_area")
+                scope_text = st.session_state.scope_text_area
             else:
-                scope_text = uploaded_scope.getvalue().decode("utf-8")
+                st.info("Upload a document or select lab data to preview.")
+
+        st.markdown("---")
+        audit_name = st.text_input(
+            "📝 Audit Name",
+            placeholder="e.g. AWS Prod Q4 2026 – Access Control Review",
+            key="audit_name_input"
+        )
+        colbtn1, colbtn2, colbtn3 = st.columns([1, 1, 1])
+        if colbtn2.button("🚀 Run Swarm", type="primary", use_container_width=True, key="scope_btn"):
+            if not scope_text:
+                st.warning("Please provide scope text to analyze.")
+            elif not os.path.exists(PARSED_JSON_FILE):
+                st.error("JSON Framework Database missing. Please fetch the data using the sidebar.")
+            else:
+                with open(PARSED_JSON_FILE, 'r', encoding='utf-8') as f:
+                    full_scf_db = json.load(f)
+                st.session_state.scf_dict = {c["control_id"]: c for c in full_scf_db}
                 
-        # Lab integration
-        lab_txt = load_lab_files(extension='.txt')
-        selected_lab = st.selectbox("Or select Lab Data", ["None"] + lab_txt, key="scope_lab")
-        if selected_lab != "None" and not scope_text:
-            with open(os.path.join(LAB_DATA_DIR, selected_lab), 'r', encoding='utf-8') as f:
-                scope_text = f.read()
+                st.session_state.scope_text_cache = scope_text
+                st.session_state.scope_submitted = True
+                
+                # Persist audit session to disk
+                session_name = audit_name.strip() if audit_name.strip() else f"Audit {st.session_state.thread_id[:8]}"
+                save_session(
+                    thread_id=st.session_state.thread_id,
+                    name=session_name,
+                    scope_preview=scope_text
+                )
+                
+                user_msg = f"**Launching swarm:** {session_name}\n\n*Scope loaded and ready.*"
+                st.session_state.chat_history.append({"role": "user", "content": user_msg})
+                st.rerun()
 
-    with colB:
-        st.markdown("### Scope Document Preview")
-        if scope_text:
-            st.text_area("Scope Content (Editable)", value=scope_text, height=180, key="scope_text_area")
-            # Pull text from the area if user edited
-            scope_text = st.session_state.scope_text_area
-        else:
-            st.info("Upload a document or select lab data to preview.")
-
-    st.markdown("---")
-    colbtn1, colbtn2, colbtn3 = st.columns([1, 1, 1])
-    if colbtn2.button("🎯 Analyze Scope and Recommend Controls", type="primary", use_container_width=True, key="scope_btn"):
-        if not scope_text:
-            st.warning("Please provide scope text to analyze.")
-        elif not os.path.exists(PARSED_JSON_FILE):
-            st.error("JSON Framework Database missing. Please fetch the data using the sidebar.")
-        else:
-            with open(PARSED_JSON_FILE, 'r', encoding='utf-8') as f:
-                full_scf_db = json.load(f)
-            scf_dict = {c["control_id"]: c for c in full_scf_db}
+    else:
+        colHeader, colReset = st.columns([4, 1])
+        with colReset:
+            if st.button("🔄 Start Over", use_container_width=True):
+                 st.session_state.thread_id = str(uuid.uuid4())
+                 st.session_state.chat_history = []
+                 st.session_state.scope_submitted = False
+                 st.rerun()
+                 
+        # THE CHAT INTERFACE
+        for msg in st.session_state.chat_history:
+            with st.chat_message(msg["role"]):
+                st.markdown(msg["content"])
+                if msg.get("reasoning"):
+                    with st.expander("View Agent Reasoning"):
+                        st.markdown(msg["reasoning"])
+                
+        # Check current graph state
+        current_state = swarm_app.get_state(config)
+        
+        is_interrupted = len(current_state.next) > 0 and current_state.next[0] == "human_review"
+        is_finished = len(current_state.next) == 0 and current_state.values.get("audit_trail") is not None
+        
+        # 1. RUNNING THE GRAPH
+        if not is_interrupted and not is_finished:
+            with st.spinner("Swarm agents are debating and executing tasks..."):
+                if not current_state.values:
+                     # FIRST RUN
+                     initial_input = {"audit_scope_narrative": st.session_state.scope_text_cache, "audit_trail": []}
+                     for event in swarm_app.stream(initial_input, config=config, stream_mode="updates"):
+                         for node, state in event.items():
+                             msg = f"🟢 **Agent Completed:** `{node}`"
+                             reasoning = None
+                             if "audit_trail" in state and state["audit_trail"]:
+                                 last_action = state["audit_trail"][-1]
+                                 reasoning = last_action.reasoning_snapshot if hasattr(last_action, 'reasoning_snapshot') else last_action.get('reasoning_snapshot')
+                             
+                             st.session_state.chat_history.append({"role": "assistant", "content": msg, "reasoning": reasoning})
+                             with st.chat_message("assistant"): 
+                                 st.markdown(msg)
+                                 if reasoning:
+                                     with st.expander("View Agent Reasoning"):
+                                         st.markdown(reasoning)
+                else:
+                     # RESUMING
+                     for event in swarm_app.stream(None, config=config, stream_mode="updates"):
+                         for node, state in event.items():
+                             msg = f"🟢 **Agent Completed:** `{node}`"
+                             reasoning = None
+                             if "audit_trail" in state and state["audit_trail"]:
+                                 last_action = state["audit_trail"][-1]
+                                 reasoning = last_action.reasoning_snapshot if hasattr(last_action, 'reasoning_snapshot') else last_action.get('reasoning_snapshot')
+                                 
+                             st.session_state.chat_history.append({"role": "assistant", "content": msg, "reasoning": reasoning})
+                             with st.chat_message("assistant"): 
+                                 st.markdown(msg)
+                                 if reasoning:
+                                     with st.expander("View Agent Reasoning"):
+                                         st.markdown(reasoning)
+                
+                st.rerun()
+                
+        # 2. INTERRUPTED (HUMAN REVIEW REQUIRED)
+        elif is_interrupted:
+            st.warning("========== HUMAN REVIEW REQUIRED ==========")
+            st.session_state.chat_history.append({"role": "assistant", "content": "The Swarm has presented the artifacts for your review."})
             
-            with st.spinner("AI is determining audit boundaries and expected controls..."):
-                try:
-                    recommendation = analyze_audit_scope(scope_text)
-                    if recommendation:
-                        st.success("Scope Analysis Complete!")
-                        st.markdown("### 🧠 AI Strategic Reasoning")
-                        st.info(recommendation.reasoning)
-                        
-                        colRes1, colRes2 = st.columns(2)
-                        with colRes1:
-                            st.markdown("### 🛡️ Relevant SCF Domains")
-                            for dom in recommendation.recommended_domains:
-                                st.markdown(f"- {dom}")
-                        with colRes2:
-                            st.markdown("### 📋 Recommended Controls to Test")
-                            
-                            # Helper function to do a fuzzy fallback lookup
-                            def get_control_data(target_cid):
-                                if target_cid in scf_dict:
-                                    return target_cid, scf_dict[target_cid]
-                                # Fallback: LLM sometimes emits "AC-1" instead of "IAC-01" or "AC-01"
-                                target_clean = target_cid.upper().replace("-", "").replace(" ", "")
-                                for db_id, data in scf_dict.items():
-                                    db_clean = db_id.upper().replace("-", "").replace(" ", "")
-                                    if target_clean in db_clean or db_clean in target_clean:
-                                        return db_id, data
-                                return target_cid, {}
+            final_state = current_state.values
+            
+            tab1, tab2 = st.tabs(["📄 1-Pager Risk Context", "📋 Control Matrix"])
+            
+            with tab1:
+                st.markdown(final_state.get('risk_context_document', 'No context document found.'))
+                
+            with tab2:
+                controls_data = []
+                scf_dict = st.session_state.get('scf_dict', {})
+                for control_obj in final_state.get('control_matrix', []):
+                    # Handle both Pydantic and raw dict
+                    cid = control_obj.control_id if hasattr(control_obj, 'control_id') else control_obj.get('control_id', '')
+                    desc = control_obj.description if hasattr(control_obj, 'description') else control_obj.get('description', '')
+                    weight = scf_dict.get(cid, {}).get("weight", 1)
+                    
+                    controls_data.append({
+                        "Control ID": cid,
+                        "Description": desc,
+                        "Weight": weight
+                    })
+                st.dataframe(pd.DataFrame(controls_data), use_container_width=True)
+            
+            st.markdown("---")
+            user_feedback = st.chat_input("Type 'Approve' to finalize, or specify changes for the agents to make...")
+            
+            if user_feedback:
+                st.session_state.chat_history.append({"role": "user", "content": user_feedback})
+                
+                if user_feedback.strip().lower() in ["approve", "approved", "looks good", "yes"]:
+                    # Approve - clear feedback
+                    swarm_app.update_state(config, {"revision_feedback": ""})
+                else:
+                    # Provide feedback
+                    swarm_app.update_state(config, {"revision_feedback": user_feedback})
+                    
+                st.rerun()
 
-                            controls_data = []
-                            questions_data = []
-                            requests_data = []
-
-                            for cid in recommendation.recommended_control_ids:
-                                actual_id, control_data = get_control_data(cid)
-                                desc = control_data.get("description", "Description not found. (The AI recommended a control ID that does not map perfectly to the 2025 SCF Database).")
-                                weight = control_data.get("weight", 1)
-                                erl = control_data.get("erl", "")
-                                question = control_data.get("question", "")
-                                
-                                display_id = actual_id if actual_id != cid else cid
-                                
-                                controls_data.append({
-                                    "Control ID": display_id,
-                                    "Description": desc,
-                                    "Weight": weight
-                                })
-                                questions_data.append({
-                                    "Control ID": display_id,
-                                    "Walkthrough Question": question
-                                })
-                                requests_data.append({
-                                    "Evidence Request List ID": erl,
-                                    "Related Controls": display_id,
-                                    "Request Content": f"Please provide evidence demonstrating: {desc}" if erl else "N/A"
-                                })
-
-                            df_controls = pd.DataFrame(controls_data)
-                            st.dataframe(df_controls, use_container_width=True)
-                            
-                            # Generate Excel File in memory
-                            import io
-                            excel_buf = io.BytesIO()
-                            with pd.ExcelWriter(excel_buf, engine='openpyxl') as writer:
-                                df_controls.to_excel(writer, sheet_name='Controls to Audit', index=False)
-                                pd.DataFrame(questions_data).to_excel(writer, sheet_name='Questions', index=False)
-                                pd.DataFrame(requests_data).to_excel(writer, sheet_name='Request List', index=False)
-                            excel_data = excel_buf.getvalue()
-
-                            st.download_button(
-                                label="📥 Download Audit Scope Plan (Excel)",
-                                data=excel_data,
-                                file_name='audit_scope_plan.xlsx',
-                                mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-                                use_container_width=True
-                            )
-                except Exception as e:
-                    st.error(f"Error during scope analysis: {e}")
+        # 3. FINISHED
+        elif is_finished:
+            st.success("Phase 1 Planning Complete!")
+            if st.button("Reset Swarm"):
+                 st.session_state.thread_id = str(uuid.uuid4())
+                 st.session_state.chat_history = []
+                 st.session_state.scope_submitted = False
+                 st.rerun()
 
 # ==========================================
 # TOOL 3: Compliance Gap Analyzer

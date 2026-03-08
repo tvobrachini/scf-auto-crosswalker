@@ -10,19 +10,21 @@ Simply paste a raw IT policy, a procedure, or upload a Cloud Security finding (l
 ![Streamlit UI Demo](assets/ui_demo.png)
 
 ## 📌 The GRC Assistant Suite
-This project features three distinct tools accessible via a clean sidebar navigation:
+This project features three distinct tools and serves as the **Core Data Hub** for the ecosystem:
 
-### 1. 🔍 SCF Auto-Crosswalker
+### 1. 🔍 SCF Auto-Crosswalker (Core Engine)
 Paste a raw IT policy, a procedure, or upload a massive Cloud Security JSON (e.g. AWS Security Hub findings), and the LLM engine will autonomously map it to the absolute best matching SCF domains and controls with a confidence score.
-- **📄 PDF Processing:** Upload massive PDF documents and have the AI parse and map the entire document.
-- **📥 CSV Exports:** Instantly export the AI mappings into an Excel-ready CSV for your compliance trackers (Drata, Vanta).
-- **⚙️ Custom Personas:** Force the AI to act specifically as a PCI-DSS QSA, FedRAMP Assessor, or GDPR DPO to tune the mappings.
 
-### 2. 🎯 Audit Scope Analyzer
-Upload a narrative Audit Scope Document (TXT/PDF) and the AI will strategically deduce which SCF Domains and specific baseline controls must be tested. Includes the AI's step-by-step reasoning.
+### 2. 🎯 Audit Scope Analyzer (Prototype)
+Upload a narrative Audit Scope Document (TXT/PDF) and the AI will strategically deduce which SCF Domains and specific baseline controls must be tested.
+> [!TIP]
+> **Looking for the full Execution Swarm?** The advanced version of this tool that actually *executes* the tests using specialized agents is now located in the **[grc-audit-swarm](https://github.com/tvobrachini/grc-audit-swarm)** repository.
 
 ### 3. 📉 Compliance Gap Analyzer
 Upload a CSV listing your company's existing IT controls, select a target framework (e.g., SOC 2, HIPAA, GDPR), and instantly generate a checklist identifying exactly which baseline SCF controls are required to meet that framework.
+
+## 🔗 Ecosystem Integration
+This repository hosts the **Master SCF Control Database** (`data/scf_parsed.json`) which is utilized by the **[GRC Audit Swarm](https://github.com/tvobrachini/grc-audit-swarm)** to provide framework-grounded mappings during multi-agent audit simulations.
 
 ## 🛠️ Audit Engineering & Compliance-as-Code
 
