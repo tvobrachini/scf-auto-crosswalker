@@ -25,7 +25,7 @@ def download_scf():
     print("[*] Fetching latest SCF release info from GitHub...")
     try:
         headers = {"Accept": "application/vnd.github.v3+json"}
-        response = requests.get(GITHUB_API_URL, headers=headers)
+        response = requests.get(GITHUB_API_URL, headers=headers, timeout=10)
         response.raise_for_status()
 
         release_data = response.json()
@@ -42,7 +42,7 @@ def download_scf():
             return False
 
         print(f"[*] Downloading from {download_url}...")
-        file_response = requests.get(download_url, stream=True)
+        file_response = requests.get(download_url, stream=True, timeout=10)
         file_response.raise_for_status()
 
         with open(RAW_SCF_FILE, "wb") as f:
@@ -168,7 +168,7 @@ def parse_scf():
             # SCF usually has weights from 1 to 10
             try:
                 weight_val = int(weight_val)
-            except:
+            except ValueError:
                 weight_val = 1
 
             erl_val = row[erl_col] if erl_col and pd.notna(row[erl_col]) else ""
