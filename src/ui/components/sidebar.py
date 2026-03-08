@@ -2,6 +2,7 @@ import os
 import streamlit as st
 from fetch_scf import PARSED_JSON_FILE, download_scf, parse_scf
 
+
 def render_sidebar():
     """Renders the main navigational sidebar and returns the selected tool mode and AI persona."""
     with st.sidebar:
@@ -54,5 +55,5 @@ def render_sidebar():
         st.info(
             "Licensed under CC Attribution-NoDerivatives 4.0. Data provided by securecontrolsframework.com"
         )
-        
+
     return app_mode, persona_prompt
