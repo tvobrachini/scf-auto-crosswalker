@@ -185,7 +185,7 @@ if app_mode == "🔍 SCF Auto-Crosswalker":
                             text_block, top_k=3, persona_prompt=persona_prompt
                         )
                         if is_batch:
-                            st.write(f"Analyzed finding #{idx+1}...")
+                            st.write(f"Analyzed finding #{idx + 1}...")
 
                         if mapping_result and mapping_result.mappings:
                             if not is_batch:
@@ -227,7 +227,7 @@ if app_mode == "🔍 SCF Auto-Crosswalker":
                                     )
 
                                     with st.expander(
-                                        f"Top Result #{m_idx+1} | {mapping.control_id} - Domain: {mapping.domain} | Confidence: {confidence}%",
+                                        f"Top Result #{m_idx + 1} | {mapping.control_id} - Domain: {mapping.domain} | Confidence: {confidence}%",
                                         expanded=True,
                                     ):
                                         st.markdown(
@@ -269,7 +269,7 @@ if app_mode == "🔍 SCF Auto-Crosswalker":
                                                     f"*(+{other_regs} minor framework mappings generated in CSV export)*"
                                                 )
                     except Exception as e:
-                        st.error(f"Error mapping input #{idx+1}: {e}")
+                        st.error(f"Error mapping input #{idx + 1}: {e}")
                     progress_bar.progress((idx + 1) / len(texts_to_process))
 
             if is_batch:
@@ -308,7 +308,7 @@ if app_mode == "🔍 SCF Auto-Crosswalker":
                     )
 
                     with st.expander(
-                        f"Priority #{m_idx+1} | {data['SCF Control ID']} (Score: {data['Priority Score']}) | Hits: {data['Hit Count']}",
+                        f"Priority #{m_idx + 1} | {data['SCF Control ID']} (Score: {data['Priority Score']}) | Hits: {data['Hit Count']}",
                         expanded=(m_idx < 3),
                     ):
                         st.markdown(
@@ -496,7 +496,7 @@ elif app_mode == "📉 Compliance Gap Analyzer":
                         st.download_button(
                             "📥 Download Missing Checklist as CSV",
                             data=csv_req,
-                            file_name=f'missing_controls_for_{target_framework.replace(" ", "_")}.csv',
+                            file_name=f"missing_controls_for_{target_framework.replace(' ', '_')}.csv",
                             mime="text/csv",
                         )
                     else:

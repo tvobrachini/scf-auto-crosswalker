@@ -1,0 +1,28 @@
+name: CodiumAI PR-Agent
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+  issue_comment:
+    types: [created]
+
+jobs:
+  pr_agent_job:
+    if: ${{ github.event.sender.type != 'Bot' }}
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+      pull-requests: write
+      contents: write
+    name: Run PR Agent on every pull request
+    steps:
+      - name: PR Agent action step
+        id: pragent
+        uses: Codium-ai/pr-agent@main
+        env:
+          OPENAI_KEY: ${{ secrets.OPENAI_API_KEY }}
+          github_action_config.auto_review: "true"
+          github_action_config.auto_describe: "true"
+          github_action_config.auto_improve: "true"
+          pr_description.extra_instructions: "Please ensure all Python code strictly utilizes `uv` for dependency management. Flag any legacy `requirements.txt` or `pip install` commands. Flag any modifications to `scf_parsed.json` data."
+          pr_reviewer.extra_instructions: "Evaluate the code against standard Audit Engineering principles. Highlight any unauthorized bypassing of security checks or hardcoded API keys."
+          pr_code_suggestions.extra_instructions: "Suggest strict Pydantic v2 schemas where applicable. Enforce modular UI components in Streamlit."
