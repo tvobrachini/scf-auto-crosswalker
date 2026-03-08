@@ -17,17 +17,20 @@ RUN apt-get update && apt-get install -y \
 # Install uv for fast package management
 RUN pip install uv
 
-# Copy the requirements file
-COPY requirements.txt .
+# Copy the project lockfiles
+COPY pyproject.toml uv.lock ./
 
-# Install dependencies using uv
-RUN uv pip install --system -r requirements.txt
+# Install dependencies using uv deterministically
+RUN uv sync --frozen --no-dev
 
 # Copy the rest of the application
 COPY . .
 
+# Add the virtual environment to the PATH
+ENV PATH="/app/.venv/bin:$PATH"
+
 # Expose the Streamlit port
 EXPOSE 8501
 
-# Run the Streamlit app
+# Run the Streamlit app natively from the venv
 CMD ["streamlit", "run", "app.py", "--server.port=8501", "--server.address=0.0.0.0"]
