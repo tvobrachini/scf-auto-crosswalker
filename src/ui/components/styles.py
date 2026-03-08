@@ -1,5 +1,6 @@
 import streamlit as st
 
+
 def inject_premium_css():
     """Injects custom CSS for a premium, modern dashboard look."""
     st.markdown(
