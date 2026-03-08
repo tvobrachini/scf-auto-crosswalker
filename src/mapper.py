@@ -85,7 +85,7 @@ def map_text_to_scf(input_text: str, top_k: int = 3, persona_prompt: str = None)
     if not scf_data:
         return None
 
-    llm = ChatGroq(temperature=0, model_name="llama-3.3-70b-versatile")
+    llm = ChatGroq(temperature=0, model_name="llama-3.1-8b-instant")
     structured_llm = llm.with_structured_output(MappingResult)
 
     base_persona = "You are an expert IT Auditor and GRC Engineer."

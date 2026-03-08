@@ -12,122 +12,18 @@ import streamlit as st  # noqa: E402
 import json  # noqa: E402
 import pandas as pd  # noqa: E402
 import pdfplumber  # noqa: E402
-from fetch_scf import PARSED_JSON_FILE, download_scf, parse_scf  # noqa: E402
+from fetch_scf import PARSED_JSON_FILE  # noqa: E402
 from mapper import map_text_to_scf  # noqa: E402
+from ui.components.styles import inject_premium_css  # noqa: E402
+from ui.components.sidebar import render_sidebar  # noqa: E402
 
 st.set_page_config(page_title="GRC Assistant", page_icon="🛡️", layout="wide")
 
 # --- Custom CSS for Premium Look ---
-st.markdown(
-    """
-<style>
-    /* Main Layout */
-    .stApp {
-        background-color: #0a0a0a;
-        color: #ededed;
-        font-family: 'Inter', sans-serif;
-    }
-
-    /* Headers & Text */
-    h1, h2, h3 {
-        color: #ffffff !important;
-        font-weight: 700 !important;
-        letter-spacing: -0.02em;
-    }
-
-    /* Sidebar Styling */
-    [data-testid="stSidebar"] {
-        background-color: #121212 !important;
-        border-right: 1px solid rgba(255,255,255,0.05);
-    }
-
-    /* Buttons */
-    .stButton>button {
-        background: linear-gradient(135deg, #8A05BE 0%, #4338ca 100%);
-        color: white;
-        border: none;
-        border-radius: 8px;
-        padding: 0.5rem 1rem;
-        font-weight: 500;
-        transition: all 0.3s ease;
-    }
-    .stButton>button:hover {
-        opacity: 0.9;
-        transform: translateY(-1px);
-        box-shadow: 0 4px 12px rgba(138,5,190,0.3);
-    }
-
-    /* Dataframes/Tables */
-    [data-testid="stDataFrame"] {
-        border-radius: 8px;
-        overflow: hidden;
-        border: 1px solid rgba(255,255,255,0.1);
-    }
-
-    /* File Uploader */
-    [data-testid="stFileUploader"] {
-        border: 1px dashed rgba(138,5,190,0.4);
-        border-radius: 8px;
-        background-color: rgba(255,255,255,0.02);
-    }
-</style>
-""",
-    unsafe_allow_html=True,
-)
+inject_premium_css()
 
 # --- Sidebar Navigation & Setup ---
-with st.sidebar:
-    st.title("🛡️ Secure Controls Framework (SCF)")
-    st.markdown("### GRC Assistant Platform")
-
-    app_mode = st.radio(
-        "Select Tool", ["🔍 SCF Auto-Crosswalker", "📉 Compliance Gap Analyzer"]
-    )
-
-    st.markdown("---")
-    st.header("⚙️ System Status")
-
-    api_key_status = (
-        "🟢 Set" if os.environ.get("GROQ_API_KEY") else "🔴 Missing in .env"
-    )
-    st.write(f"**Groq Llama-3 API Key:** {api_key_status}")
-
-    db_status = "🟢 Ready" if os.path.exists(PARSED_JSON_FILE) else "🔴 Not Found"
-    st.write(f"**JSON SCF Database:** {db_status}")
-
-    if st.button("🔄 Force Update SCF Framework Data"):
-        with st.spinner("Downloading from official SCF GitHub..."):
-            if download_scf():
-                if parse_scf():
-                    st.success("Successfully updated and parsed the latest SCF!")
-                    st.rerun()
-                else:
-                    st.error("Failed to parse the SCF Excel file.")
-            else:
-                st.error("Failed to download the SCF.")
-
-    # Advanced Settings specifically for Crosswalker
-    if app_mode == "🔍 SCF Auto-Crosswalker":
-        st.markdown("---")
-        st.header("⚙️ Advanced AI Settings")
-        st.markdown("Customize the LLM's internal system prompt.")
-        persona_options = [
-            "None (Default General Auditor)",
-            "Act as a strict PCI-DSS Qualified Security Assessor (QSA).",
-            "Act as a FedRAMP 3PAO Assessor focusing on US Federal standards.",
-            "Act as a GDPR Data Privacy Officer (DPO) focusing heavily on PII.",
-        ]
-        selected_persona = st.selectbox("AI Persona Lens", persona_options)
-        persona_prompt = None if "None" in selected_persona else selected_persona
-    else:
-        persona_prompt = None
-
-    # Removed Audit History Section
-
-    st.markdown("---")
-    st.info(
-        "Licensed under CC Attribution-NoDerivatives 4.0. Data provided by securecontrolsframework.com"
-    )
+app_mode, persona_prompt = render_sidebar()
 
 LAB_DATA_DIR = os.path.join(os.path.dirname(__file__), "lab_data")
 
