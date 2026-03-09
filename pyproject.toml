@@ -17,6 +17,10 @@ dependencies = [
     "langgraph>=0.1.0",
     "pydantic>=2.7.0",
     "pdfplumber>=0.10.3",
+    "sentence-transformers>=2.7.0",
+    "numpy>=1.26.0",
+    "scikit-learn>=1.4.0",
+    "tenacity>=8.2.0",
 ]
 
 [tool.bandit]
