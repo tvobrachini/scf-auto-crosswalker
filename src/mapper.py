@@ -1,15 +1,33 @@
-import os
 import json
+import logging
+import os
+
+import numpy as np
+import streamlit as st
 from dotenv import load_dotenv
 from langchain_groq import ChatGroq
 from langchain_core.prompts import ChatPromptTemplate
 from pydantic import BaseModel, Field
+from sentence_transformers import SentenceTransformer
+from sklearn.metrics.pairwise import cosine_similarity
+from tenacity import (
+    retry,
+    retry_if_exception_type,
+    stop_after_attempt,
+    wait_exponential,
+)
 
 # Load environment variables (like GROQ_API_KEY)
 load_dotenv()
 
+logger = logging.getLogger(__name__)
+
 DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data")
 PARSED_JSON_FILE = os.path.join(DATA_DIR, "scf_parsed.json")
+EMBEDDINGS_CACHE_FILE = os.path.join(DATA_DIR, "scf_embeddings.npy")
+
+# Sentence-transformers model for embedding-based semantic retrieval
+_EMBEDDING_MODEL_NAME = "all-MiniLM-L6-v2"
 
 
 class MappedControl(BaseModel):
@@ -48,13 +66,91 @@ class ScopeRecommendation(BaseModel):
     )
 
 
+@st.cache_resource(show_spinner="Loading SCF database...")
 def load_scf_database():
-    """Loads the parsed JSON database of the SCF framework."""
+    """Loads the parsed JSON database of the SCF framework. Cached across Streamlit reruns."""
     if not os.path.exists(PARSED_JSON_FILE):
-        print("[-] SCF Database not found. Please run fetch_scf.py first.")
+        logger.warning("SCF Database not found. Please run fetch_scf.py first.")
         return []
     with open(PARSED_JSON_FILE, "r", encoding="utf-8") as f:
         return json.load(f)
+
+
+@st.cache_resource(show_spinner="Building semantic search index...")
+def _get_embedding_model() -> SentenceTransformer:
+    """Load the sentence-transformers model. Cached so it is only downloaded once."""
+    return SentenceTransformer(_EMBEDDING_MODEL_NAME)
+
+
+def _build_or_load_embeddings(scf_data: list[dict]) -> np.ndarray:
+    """
+    Build (or load from disk cache) embeddings for all SCF control descriptions.
+
+    Embeddings are persisted to EMBEDDINGS_CACHE_FILE so they are computed
+    only once per SCF release, not on every Streamlit rerun.
+    """
+    if os.path.exists(EMBEDDINGS_CACHE_FILE):
+        logger.info("Loading cached SCF embeddings from %s", EMBEDDINGS_CACHE_FILE)
+        return np.load(EMBEDDINGS_CACHE_FILE)
+
+    logger.info(
+        "Building SCF embeddings for %d controls (one-time cost)...", len(scf_data)
+    )
+    model = _get_embedding_model()
+    texts = [f"{c['control_id']} {c['domain']}: {c['description']}" for c in scf_data]
+    embeddings = model.encode(texts, show_progress_bar=False, convert_to_numpy=True)
+    np.save(EMBEDDINGS_CACHE_FILE, embeddings)
+    logger.info("Saved embeddings cache to %s", EMBEDDINGS_CACHE_FILE)
+    return embeddings
+
+
+def _semantic_filter(
+    input_text: str, scf_data: list[dict], top_k: int = 50
+) -> list[dict]:
+    """
+    Return the top_k most semantically similar SCF controls to the input text.
+
+    Uses sentence-transformers (all-MiniLM-L6-v2) + cosine similarity instead of
+    naive keyword matching — correctly handles synonyms like 'encryption'/'cryptography'.
+    """
+    model = _get_embedding_model()
+    corpus_embeddings = _build_or_load_embeddings(scf_data)
+
+    query_embedding = model.encode([input_text], convert_to_numpy=True)
+    similarities = cosine_similarity(query_embedding, corpus_embeddings)[0]
+
+    top_indices = np.argsort(similarities)[::-1][:top_k]
+    results = [scf_data[i] for i in top_indices]
+    logger.info(
+        "Semantic filter: top-%d controls retrieved (best similarity=%.3f)",
+        top_k,
+        float(similarities[top_indices[0]]),
+    )
+    return results
+
+
+def _validate_mapping_result(
+    result: MappingResult, scf_dict: dict[str, dict]
+) -> MappingResult:
+    """
+    Post-LLM validation: remove hallucinated control IDs and clamp confidence values.
+
+    Checks each returned control_id against the live SCF database and filters out
+    any IDs that do not exist. Confidence is clamped to [0, 100].
+    """
+    valid_mappings = []
+    for m in result.mappings:
+        if m.control_id not in scf_dict:
+            logger.warning(
+                "LLM hallucinated control ID '%s' — not found in SCF database. Dropping.",
+                m.control_id,
+            )
+            continue
+        m.confidence = max(0, min(100, m.confidence))
+        valid_mappings.append(m)
+
+    result.mappings = valid_mappings
+    return result
 
 
 def construct_scf_context(scf_data):
@@ -65,15 +161,23 @@ def construct_scf_context(scf_data):
     we will pass a condensed version of the controls.
     """
     condensed_list = []
-    # If there are too many (1400+), we might need to truncate for the LLM
-    # context window, or use a naive keyword filter first.
-    # For now, let's load all and let the LLM handle the massive text blob if possible.
     for control in scf_data:
         condensed_list.append(
             f"[{control['control_id']}] {control['domain']}: {control['description']}"
         )
 
     return "\n".join(condensed_list)
+
+
+@retry(
+    wait=wait_exponential(multiplier=1, min=2, max=60),
+    stop=stop_after_attempt(3),
+    retry=retry_if_exception_type(Exception),
+    reraise=True,
+)
+def _invoke_chain(chain, inputs: dict):
+    """Invoke a LangChain chain with exponential backoff retry for transient errors."""
+    return chain.invoke(inputs)
 
 
 def map_text_to_scf(input_text: str, top_k: int = 3, persona_prompt: str = None):
@@ -109,49 +213,27 @@ def map_text_to_scf(input_text: str, top_k: int = 3, persona_prompt: str = None)
 
     chain = prompt | structured_llm
 
-    print("[*] Sending mapping request to Groq (Llama-3)...")
+    logger.info("Sending mapping request to Groq (Llama-3)...")
 
-    # We will pass the full context block. Llama-3-70b handles 8k tokens.
-    # The full SCF is ~50k-80k tokens.
-    # NOTE: Since 1451 controls might exceed the 8k window of `llama3-70b-8192`,
-    # we need a simple keyword filter to reduce the context size before sending.
-
-    # Simple Keyword Filter (Naive RAG alternative)
-    keywords = input_text.lower().replace(",", "").replace(".", "").split()
-    filtered_scf = []
-    for c in scf_data:
-        desc = str(c["description"]).lower()
-        if any(
-            kw in desc for kw in keywords if len(kw) > 4
-        ):  # Only match words > 4 chars
-            filtered_scf.append(c)
-
-    # If the filter is too aggressive, fallback to a slice of the full DB
-    if not filtered_scf:
-        filtered_scf = scf_data[:100]
-    else:
-        # Sort by most keyword matches (very naive but works for a fast prototype)
-        filtered_scf.sort(
-            key=lambda c: sum(
-                1 for kw in keywords if kw in str(c["description"]).lower()
-            ),
-            reverse=True,
-        )
-        filtered_scf = filtered_scf[
-            :50
-        ]  # Send only top 50 matches to fit in token window
+    # Semantic RAG filter: embed + cosine similarity instead of naive keyword matching
+    filtered_scf = _semantic_filter(input_text, scf_data, top_k=50)
 
     context_str = construct_scf_context(filtered_scf)
-    print(
-        f"[*] Filtered context down to {len(filtered_scf)} potential controls to fit Groq context window."
+    logger.info(
+        "Semantic filter selected %d controls for LLM context.", len(filtered_scf)
     )
 
-    response = chain.invoke(
-        {"scf_context": context_str, "input_text": input_text, "top_k": top_k}
+    response = _invoke_chain(
+        chain, {"scf_context": context_str, "input_text": input_text, "top_k": top_k}
     )
 
-    # Enrich the LLM response with the regulatory mappings from our database
+    # Build lookup dict for validation and regulation enrichment
     scf_dict = {c["control_id"]: c for c in scf_data}
+
+    # Post-LLM validation: drop hallucinated IDs, clamp confidence
+    response = _validate_mapping_result(response, scf_dict)
+
+    # Enrich with regulatory mappings from the database
     for mapping in response.mappings:
         if mapping.control_id in scf_dict:
             mapping.regulations = scf_dict[mapping.control_id].get("regulations", {})
@@ -200,27 +282,31 @@ def analyze_audit_scope(scope_text: str):
 
     chain = prompt | structured_llm
 
-    response = chain.invoke(
-        {"domain_context": domain_context, "scope_text": scope_text}
+    response = _invoke_chain(
+        chain, {"domain_context": domain_context, "scope_text": scope_text}
     )
 
     return response
 
 
 if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO)
     # A simple test run if executed directly
     test_policy = "All cloud storage buckets (S3) must be configured to prohibit public read and write access to protect sensitive customer data."
-    print(f'[*] Testing mapping engine on input:\n"{test_policy}"')
+    logger.info("Testing mapping engine on input: %s", test_policy)
 
     try:
         result = map_text_to_scf(test_policy)
         if result:
-            print("\n[+] Mapping Results:")
+            logger.info("Mapping Results:")
             for mapping in result.mappings:
-                print(
-                    f" - {mapping.control_id} ({mapping.domain}) [Confidence: {mapping.confidence}%]"
+                logger.info(
+                    " - %s (%s) [Confidence: %d%%]",
+                    mapping.control_id,
+                    mapping.domain,
+                    mapping.confidence,
                 )
-                print(f"   Justification: {mapping.justification}")
+                logger.info("   Justification: %s", mapping.justification)
                 if mapping.regulations:
                     regs = list(mapping.regulations.keys())
                     display_regs = [
@@ -235,9 +321,11 @@ if __name__ == "__main__":
                     ]
                     if not display_regs:
                         display_regs = regs[:4]
-                    print(
-                        f"   Related Frameworks: {', '.join(display_regs)} (+{len(regs) - len(display_regs)} more)"
+                    logger.info(
+                        "   Related Frameworks: %s (+%d more)",
+                        ", ".join(display_regs),
+                        len(regs) - len(display_regs),
                     )
     except Exception as e:
-        print(f"\n[-] Error running Groq mapping: {e}")
-        print("[-] Ensure you have set your GROQ_API_KEY environment variable.")
+        logger.error("Error running Groq mapping: %s", e)
+        logger.error("Ensure you have set your GROQ_API_KEY environment variable.")

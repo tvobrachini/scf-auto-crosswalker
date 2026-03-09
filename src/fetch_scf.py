@@ -1,11 +1,43 @@
-import os
-import requests
-import pandas as pd
 import json
+import logging
+import re
+import os
+
+import pandas as pd
+import requests
+from pydantic import BaseModel, Field, field_validator
+
+logger = logging.getLogger(__name__)
 
 DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data")
 RAW_SCF_FILE = os.path.join(DATA_DIR, "scf_raw.xlsx")
 PARSED_JSON_FILE = os.path.join(DATA_DIR, "scf_parsed.json")
+
+
+class SCFControl(BaseModel):
+    """Pydantic schema for a parsed SCF control record. Validates structure post-parse."""
+
+    control_id: str = Field(
+        ..., description="SCF control ID, e.g. 'GOV-01' or 'CLD-02.1'"
+    )
+    domain: str = Field(default="", description="SCF Domain name")
+    description: str = Field(..., description="Control description text")
+    weight: int = Field(
+        default=1, ge=1, le=10, description="Relative control weighting 1-10"
+    )
+    erl: str = Field(default="", description="Evidence Request List")
+    question: str = Field(default="", description="SCF control question")
+    regulations: dict = Field(
+        default_factory=dict, description="Regulatory framework mappings"
+    )
+
+    @field_validator("control_id")
+    @classmethod
+    def validate_control_id_format(cls, v: str) -> str:
+        if not re.match(r"^[A-Z]{2,6}-\d{2}(\.\d+)?$", v):
+            raise ValueError(f"Invalid SCF control ID format: '{v}'")
+        return v
+
 
 # We use the official GitHub API to dynamically get the latest release
 GITHUB_API_URL = "https://api.github.com/repos/securecontrolsframework/securecontrolsframework/releases/latest"
@@ -19,10 +51,10 @@ def setup_directories():
 def download_scf():
     """Dynamically fetches the latest SCF Excel file from GitHub releases."""
     if os.path.exists(RAW_SCF_FILE):
-        print(f"[*] Found existing SCF file at {RAW_SCF_FILE}")
+        logger.info("Found existing SCF file at %s", RAW_SCF_FILE)
         return True
 
-    print("[*] Fetching latest SCF release info from GitHub...")
+    logger.info("Fetching latest SCF release info from GitHub...")
     try:
         headers = {"Accept": "application/vnd.github.v3+json"}
         response = requests.get(GITHUB_API_URL, headers=headers, timeout=10)
@@ -34,14 +66,14 @@ def download_scf():
         for asset in release_data.get("assets", []):
             if asset["name"].endswith(".xlsx"):
                 download_url = asset["browser_download_url"]
-                print(f"[+] Found latest release file: {asset['name']}")
+                logger.info("Found latest release file: %s", asset["name"])
                 break
 
         if not download_url:
-            print("[-] Could not find an .xlsx file in the latest GitHub release.")
+            logger.error("Could not find an .xlsx file in the latest GitHub release.")
             return False
 
-        print(f"[*] Downloading from {download_url}...")
+        logger.info("Downloading from %s...", download_url)
         file_response = requests.get(download_url, stream=True, timeout=10)
         file_response.raise_for_status()
 
@@ -49,19 +81,19 @@ def download_scf():
             for chunk in file_response.iter_content(chunk_size=8192):
                 f.write(chunk)
 
-        print("[+] Successfully downloaded latest SCF Excel file.")
+        logger.info("Successfully downloaded latest SCF Excel file.")
         return True
     except requests.exceptions.HTTPError as e:
-        print(f"[-] HTTP Error fetching SCF: {e}")
+        logger.error("HTTP Error fetching SCF: %s", e)
         return False
     except Exception as e:
-        print(f"[-] Error downloading SCF: {e}")
+        logger.error("Error downloading SCF: %s", e)
         return False
 
 
 def parse_scf():
     """Parses the massive Excel file into a lightweight JSON database for the AI."""
-    print("[*] Parsing SCF Excel file...")
+    logger.info("Parsing SCF Excel file...")
     try:
         xls = pd.ExcelFile(RAW_SCF_FILE)
         # Find the correct main sheet, usually named "SCF 2025.4" or similar
@@ -72,11 +104,13 @@ def parse_scf():
                 break
 
         if not target_sheet:
-            print("[-] Could not find the main SCF sheet. Available sheets:")
-            print(xls.sheet_names)
+            logger.error(
+                "Could not find the main SCF sheet. Available sheets: %s",
+                xls.sheet_names,
+            )
             return False
 
-        print(f"[*] Found main sheet: {target_sheet}")
+        logger.info("Found main sheet: %s", target_sheet)
         df = pd.read_excel(
             RAW_SCF_FILE, sheet_name=target_sheet
         )  # headers usually start on row 0 now
@@ -117,12 +151,18 @@ def parse_scf():
         )
 
         if not id_col or not desc_col:
-            print("[-] Could not find required columns in the Excel file.")
-            print(f"Available columns: {df.columns.tolist()[:10]}")
+            logger.error(
+                "Could not find required columns in the Excel file. Available: %s",
+                df.columns.tolist()[:10],
+            )
             return False
 
-        print(
-            f"[+] Found columns: ID='{id_col}', Domain='{domain_col}', Description='{desc_col}', Weight='{weight_col}'"
+        logger.info(
+            "Found columns: ID='%s', Domain='%s', Description='%s', Weight='%s'",
+            id_col,
+            domain_col,
+            desc_col,
+            weight_col,
         )
 
         # Identify key regulatory columns (ISO, NIST, SOC 2, GDPR, CCPA, HIPAA, PCI)
@@ -143,8 +183,8 @@ def parse_scf():
             if any(kw in col_lower for kw in framework_keywords):
                 reg_cols.append(col)
 
-        print(
-            f"[*] Extracting mappings for {len(reg_cols)} key frameworks/regulations..."
+        logger.info(
+            "Extracting mappings for %d key frameworks/regulations...", len(reg_cols)
         )
 
         # Filter and clean
@@ -195,21 +235,33 @@ def parse_scf():
                     clean_name = str(r_col).replace("\n", " ").strip()
                     record["regulations"][clean_name] = str(val).strip()
 
+            # Validate record shape with Pydantic before storing
+            try:
+                SCFControl(**record)
+            except Exception as validation_err:
+                logger.warning(
+                    "Skipping control '%s' — failed schema validation: %s",
+                    record.get("control_id", "UNKNOWN"),
+                    validation_err,
+                )
+                continue
+
             records.append(record)
 
         with open(PARSED_JSON_FILE, "w", encoding="utf-8") as f:
             json.dump(records, f, indent=2, ensure_ascii=False)
 
-        print(f"[+] Successfully parsed {len(records)} controls.")
-        print(f"[+] Saved lightweight AI database to {PARSED_JSON_FILE}")
+        logger.info("Successfully parsed %d controls.", len(records))
+        logger.info("Saved lightweight AI database to %s", PARSED_JSON_FILE)
         return True
 
     except Exception as e:
-        print(f"[-] Error parsing Excel file: {e}")
+        logger.error("Error parsing Excel file: %s", e)
         return False
 
 
 def main():
+    logging.basicConfig(level=logging.INFO)
     setup_directories()
     if download_scf():
         parse_scf()
