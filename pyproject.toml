@@ -21,7 +21,7 @@ dependencies = [
 
 [tool.bandit]
 exclude_dirs = ["tests", ".venv"]
-skips = ["B101", "B105"] # Skip assert usage and false-positive hardcoded passwords
+skips = ["B101"] # Skip assert usage only; B105 re-enabled to detect real hardcoded secrets
 
 [dependency-groups]
 dev = [

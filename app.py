@@ -27,6 +27,8 @@ app_mode, persona_prompt = render_sidebar()
 
 LAB_DATA_DIR = os.path.join(os.path.dirname(__file__), "lab_data")
 
+PRIORITY_FRAMEWORKS = ["gdpr", "iso", "nist", "soc", "pci", "ccpa", "hipaa"]
+
 
 def load_lab_files(extension=None):
     if not os.path.exists(LAB_DATA_DIR):
@@ -74,9 +76,11 @@ if app_mode == "🔍 SCF Auto-Crosswalker":
                 "Select Sample", ["None"] + lab_files, key="cw_lab"
             )
             if selected_lab_file != "None":
-                with open(
-                    os.path.join(LAB_DATA_DIR, selected_lab_file), "r", encoding="utf-8"
-                ) as f:
+                _resolved = os.path.realpath(os.path.join(LAB_DATA_DIR, selected_lab_file))
+                if not _resolved.startswith(os.path.realpath(LAB_DATA_DIR) + os.sep):
+                    st.error("Invalid file selection.")
+                    selected_lab_file = "None"
+                with open(_resolved, "r", encoding="utf-8") as f:
                     if selected_lab_file.endswith(".json"):
                         data = json.load(f)
                         if (
@@ -139,8 +143,13 @@ if app_mode == "🔍 SCF Auto-Crosswalker":
                         input_text = json.dumps(data, indent=2)
                         st.success("Successfully loaded single JSON finding.")
                 else:
-                    input_text = uploaded_file.getvalue().decode("utf-8")
-                    st.success("Successfully loaded text finding.")
+                    try:
+                        input_text = uploaded_file.getvalue().decode("utf-8")
+                    except UnicodeDecodeError:
+                        st.error("File encoding not supported. Please upload a UTF-8 encoded file.")
+                        input_text = ""
+                    else:
+                        st.success("Successfully loaded text finding.")
             except Exception as e:
                 st.error(f"Error reading file: {e}")
 
@@ -241,19 +250,10 @@ if app_mode == "🔍 SCF Auto-Crosswalker":
                                             st.markdown(
                                                 "#### Corresponding Regulatory Mappings"
                                             )
-                                            priority = [
-                                                "gdpr",
-                                                "iso",
-                                                "nist",
-                                                "soc",
-                                                "pci",
-                                                "ccpa",
-                                                "hipaa",
-                                            ]
                                             display_regs = {
                                                 r: v
                                                 for r, v in mapping.regulations.items()
-                                                if any(p in r.lower() for p in priority)
+                                                if any(p in r.lower() for p in PRIORITY_FRAMEWORKS)
                                             }
                                             other_regs = len(mapping.regulations) - len(
                                                 display_regs
@@ -320,19 +320,10 @@ if app_mode == "🔍 SCF Auto-Crosswalker":
                         st.progress(data["Average Confidence (%)"] / 100.0)
                         if data["Regulations"]:
                             st.markdown("#### Corresponding Regulatory Mappings")
-                            priority = [
-                                "gdpr",
-                                "iso",
-                                "nist",
-                                "soc",
-                                "pci",
-                                "ccpa",
-                                "hipaa",
-                            ]
                             display_regs = {
                                 r: v
                                 for r, v in data["Regulations"].items()
-                                if any(p in r.lower() for p in priority)
+                                if any(p in r.lower() for p in PRIORITY_FRAMEWORKS)
                             }
                             other_regs = len(data["Regulations"]) - len(display_regs)
                             if display_regs:
