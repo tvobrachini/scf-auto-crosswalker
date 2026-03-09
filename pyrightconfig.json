@@ -1,0 +1,13 @@
+{
+  "include": ["src"],
+  "typeCheckingMode": "basic",
+  "reportAttributeAccessIssue": "none",
+  "reportArgumentType": "none",
+  "reportCallIssue": "none",
+  "reportOperatorIssue": "none",
+  "reportUnknownVariableType": "none",
+  "reportUnknownMemberType": "none",
+  "reportUnknownArgumentType": "none",
+  "venvPath": ".",
+  "venv": ".venv"
+}
