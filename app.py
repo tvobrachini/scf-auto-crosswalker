@@ -76,7 +76,9 @@ if app_mode == "🔍 SCF Auto-Crosswalker":
                 "Select Sample", ["None"] + lab_files, key="cw_lab"
             )
             if selected_lab_file != "None":
-                _resolved = os.path.realpath(os.path.join(LAB_DATA_DIR, selected_lab_file))
+                _resolved = os.path.realpath(
+                    os.path.join(LAB_DATA_DIR, selected_lab_file)
+                )
                 if not _resolved.startswith(os.path.realpath(LAB_DATA_DIR) + os.sep):
                     st.error("Invalid file selection.")
                     selected_lab_file = "None"
@@ -146,7 +148,9 @@ if app_mode == "🔍 SCF Auto-Crosswalker":
                     try:
                         input_text = uploaded_file.getvalue().decode("utf-8")
                     except UnicodeDecodeError:
-                        st.error("File encoding not supported. Please upload a UTF-8 encoded file.")
+                        st.error(
+                            "File encoding not supported. Please upload a UTF-8 encoded file."
+                        )
                         input_text = ""
                     else:
                         st.success("Successfully loaded text finding.")
@@ -253,7 +257,10 @@ if app_mode == "🔍 SCF Auto-Crosswalker":
                                             display_regs = {
                                                 r: v
                                                 for r, v in mapping.regulations.items()
-                                                if any(p in r.lower() for p in PRIORITY_FRAMEWORKS)
+                                                if any(
+                                                    p in r.lower()
+                                                    for p in PRIORITY_FRAMEWORKS
+                                                )
                                             }
                                             other_regs = len(mapping.regulations) - len(
                                                 display_regs
