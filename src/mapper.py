@@ -85,7 +85,9 @@ def map_text_to_scf(input_text: str, top_k: int = 3, persona_prompt: str = None)
     if not scf_data:
         return None
 
-    llm = ChatGroq(temperature=0, model_name=os.environ.get("GROQ_MODEL", "llama-3.1-8b-instant"))
+    llm = ChatGroq(
+        temperature=0, model_name=os.environ.get("GROQ_MODEL", "llama-3.1-8b-instant")
+    )
     structured_llm = llm.with_structured_output(MappingResult)
 
     base_persona = "You are an expert IT Auditor and GRC Engineer."
@@ -165,7 +167,9 @@ def analyze_audit_scope(scope_text: str):
     if not scf_data:
         return None
 
-    llm = ChatGroq(temperature=0, model_name=os.environ.get("GROQ_MODEL", "llama-3.1-8b-instant"))
+    llm = ChatGroq(
+        temperature=0, model_name=os.environ.get("GROQ_MODEL", "llama-3.1-8b-instant")
+    )
     structured_llm = llm.with_structured_output(ScopeRecommendation)
 
     # Compress context to bypass strict Groq rate limits.
