@@ -10,7 +10,12 @@ def render_sidebar():
         st.markdown("### GRC Assistant Platform")
 
         app_mode = st.radio(
-            "Select Tool", ["🔍 SCF Auto-Crosswalker", "📉 Compliance Gap Analyzer"]
+            "Select Tool",
+            [
+                "🔍 SCF Auto-Crosswalker",
+                "📉 Compliance Gap Analyzer",
+                "🎯 Audit Scope Analyzer",
+            ],
         )
 
         st.markdown("---")

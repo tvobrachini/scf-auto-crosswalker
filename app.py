@@ -13,7 +13,7 @@ import json  # noqa: E402
 import pandas as pd  # noqa: E402
 import pdfplumber  # noqa: E402
 from fetch_scf import PARSED_JSON_FILE  # noqa: E402
-from mapper import map_text_to_scf  # noqa: E402
+from mapper import map_text_to_scf, analyze_audit_scope  # noqa: E402
 from ui.components.styles import inject_premium_css  # noqa: E402
 from ui.components.sidebar import render_sidebar  # noqa: E402
 
@@ -463,41 +463,223 @@ elif app_mode == "📉 Compliance Gap Analyzer":
                     )
 
                     if len(required_scf) > 0:
-                        # Convert required scf to dataframe for easy viewing
-                        df_req = pd.DataFrame(
-                            [
+                        # Detect the control ID column in the uploaded CSV
+                        id_col_candidates = [
+                            c
+                            for c in df_existing.columns
+                            if "control" in c.lower() and "id" in c.lower()
+                        ]
+                        existing_id_col = (
+                            id_col_candidates[0]
+                            if id_col_candidates
+                            else df_existing.columns[0]
+                        )
+                        existing_ids = set(
+                            df_existing[existing_id_col]
+                            .dropna()
+                            .astype(str)
+                            .str.strip()
+                            .str.upper()
+                        )
+
+                        rows = []
+                        for rc in required_scf:
+                            cid = rc.get("control_id", "")
+                            status = (
+                                "✅ Covered"
+                                if cid.upper() in existing_ids
+                                else "❌ Gap"
+                            )
+                            rows.append(
                                 {
-                                    "Required Control ID": rc.get("control_id", ""),
+                                    "Status": status,
+                                    "Required Control ID": cid,
                                     "Domain": rc.get("domain", ""),
                                     "Description": rc.get("description", ""),
                                     "Evidence Request List (ERL)": rc.get("erl", ""),
                                     "Control Question": rc.get("question", ""),
                                 }
-                                for rc in required_scf
-                            ]
-                        )
+                            )
+
+                        df_req = pd.DataFrame(rows)
+                        df_gaps = df_req[df_req["Status"] == "❌ Gap"]
+                        df_covered = df_req[df_req["Status"] == "✅ Covered"]
 
                         st.markdown("### ⚠️ Gap Profile Breakdown")
-                        st.markdown(
-                            f"Your uploaded list contains `{len(df_existing)}` controls. Based on the SCF, `{target_framework}` mandates at least `{len(required_scf)}` unique control touchpoints."
+                        col_m1, col_m2, col_m3 = st.columns(3)
+                        col_m1.metric("Required Controls", len(required_scf))
+                        col_m2.metric(
+                            "✅ Covered",
+                            len(df_covered),
+                            delta=f"{round(len(df_covered) / len(required_scf) * 100)}%",
                         )
+                        col_m3.metric("❌ Gaps", len(df_gaps))
 
-                        # Note: Deep AI comparison of "Existing CSV vs Required framework" is extremely token heavy.
-                        # For Phase 3, we just provide the required checklist as requested by user ("app tells them what they *need* for the regulation, producing a checklist").
-
-                        st.markdown(
-                            f"#### Complete Checklist of Required SCF Controls for {target_framework}"
+                        tab_gaps, tab_all = st.tabs(
+                            [
+                                f"❌ Gaps Only ({len(df_gaps)})",
+                                f"Full Checklist ({len(required_scf)})",
+                            ]
                         )
-                        st.dataframe(df_req, use_container_width=True)
-
-                        csv_req = df_req.to_csv(index=False).encode("utf-8")
-                        st.download_button(
-                            "📥 Download Missing Checklist as CSV",
-                            data=csv_req,
-                            file_name=f"missing_controls_for_{target_framework.replace(' ', '_')}.csv",
-                            mime="text/csv",
-                        )
+                        with tab_gaps:
+                            if df_gaps.empty:
+                                st.success(
+                                    f"No gaps found! All required {target_framework} controls appear to be covered."
+                                )
+                            else:
+                                st.dataframe(df_gaps, use_container_width=True)
+                                csv_gaps = df_gaps.to_csv(index=False).encode("utf-8")
+                                st.download_button(
+                                    "📥 Download Gaps as CSV",
+                                    data=csv_gaps,
+                                    file_name=f"gaps_{target_framework.replace(' ', '_')}.csv",
+                                    mime="text/csv",
+                                    type="primary",
+                                )
+                        with tab_all:
+                            st.dataframe(df_req, use_container_width=True)
+                            csv_req = df_req.to_csv(index=False).encode("utf-8")
+                            st.download_button(
+                                "📥 Download Full Checklist as CSV",
+                                data=csv_req,
+                                file_name=f"checklist_{target_framework.replace(' ', '_')}.csv",
+                                mime="text/csv",
+                            )
                     else:
                         st.error(
                             f"Could not find any specific mappings for {target_framework} in the database. Try selecting another framework or re-fetching the SCF data."
                         )
+
+# ==========================================
+# TOOL 3: Audit Scope Analyzer
+# ==========================================
+elif app_mode == "🎯 Audit Scope Analyzer":
+    st.title("🎯 Audit Scope Analyzer")
+    st.markdown(
+        "Paste or upload an audit scope document and the AI will recommend the specific SCF Domains and baseline controls that must be tested."
+    )
+
+    if not os.path.exists(PARSED_JSON_FILE):
+        st.error("SCF Database not found. Please fetch data using the sidebar.")
+    else:
+        tab_text, tab_file = st.tabs(["📝 Paste Scope Document", "📄 Upload TXT File"])
+
+        scope_text = ""
+
+        with tab_text:
+            text_input = st.text_area(
+                "Audit Scope Document",
+                height=200,
+                placeholder="Paste your audit scope narrative here...",
+            )
+            st.markdown("**Or quickly test with Lab Data:**")
+            lab_txt = load_lab_files(extension=".txt")
+            if lab_txt:
+                selected_lab_txt = st.selectbox(
+                    "Select Sample", ["None"] + lab_txt, key="scope_lab"
+                )
+                if selected_lab_txt != "None":
+                    _resolved = os.path.realpath(
+                        os.path.join(LAB_DATA_DIR, selected_lab_txt)
+                    )
+                    if not _resolved.startswith(
+                        os.path.realpath(LAB_DATA_DIR) + os.sep
+                    ):
+                        st.error("Invalid file selection.")
+                    else:
+                        with open(_resolved, "r", encoding="utf-8") as f:
+                            scope_text = f.read()
+                        st.info(f"Loaded: {selected_lab_txt}")
+                        with st.expander("View File Contents"):
+                            st.code(scope_text)
+
+            if text_input:
+                scope_text = text_input
+
+        with tab_file:
+            uploaded_scope = st.file_uploader(
+                "Upload Scope Document (TXT)", type=["txt"], key="scope_up"
+            )
+            if uploaded_scope is not None:
+                try:
+                    scope_text = uploaded_scope.getvalue().decode("utf-8")
+                    st.success(f"Loaded: {uploaded_scope.name}")
+                except UnicodeDecodeError:
+                    st.error("File encoding not supported. Please upload a UTF-8 file.")
+
+        st.markdown("---")
+        col1, col2, col3 = st.columns([1, 1, 1])
+        if col2.button(
+            "🎯 Analyze Scope & Recommend Controls",
+            type="primary",
+            use_container_width=True,
+            key="scope_btn",
+        ):
+            if not scope_text:
+                st.warning("Please paste or upload an audit scope document.")
+            elif not os.environ.get("GROQ_API_KEY"):
+                st.error("No GROQ_API_KEY found in .env.")
+            else:
+                with st.spinner("AI is analyzing the audit scope against the SCF..."):
+                    try:
+                        result = analyze_audit_scope(scope_text)
+
+                        if result:
+                            st.success("Analysis Complete!")
+
+                            col_d, col_c = st.columns([1, 1])
+
+                            with col_d:
+                                st.markdown("### Recommended SCF Domains")
+                                for domain in result.recommended_domains:
+                                    st.markdown(f"- **{domain}**")
+
+                            with col_c:
+                                st.markdown("### Baseline Controls to Test")
+                                with open(PARSED_JSON_FILE, "r", encoding="utf-8") as f:
+                                    full_db = json.load(f)
+                                scf_dict = {c["control_id"]: c for c in full_db}
+
+                                control_rows = []
+                                for cid in result.recommended_control_ids:
+                                    control_info = scf_dict.get(cid, {})
+                                    st.markdown(
+                                        f"- `{cid}` — {control_info.get('description', 'See SCF database for details.')[:80]}..."
+                                        if control_info.get("description")
+                                        else f"- `{cid}`"
+                                    )
+                                    control_rows.append(
+                                        {
+                                            "Control ID": cid,
+                                            "Domain": control_info.get("domain", ""),
+                                            "Description": control_info.get(
+                                                "description", ""
+                                            ),
+                                            "SCF Control Question": control_info.get(
+                                                "question", ""
+                                            ),
+                                            "Evidence Request List": control_info.get(
+                                                "erl", ""
+                                            ),
+                                        }
+                                    )
+
+                            st.markdown("---")
+                            st.markdown("### AI Reasoning")
+                            st.info(result.reasoning)
+
+                            if control_rows:
+                                df_scope = pd.DataFrame(control_rows)
+                                csv_scope = df_scope.to_csv(index=False).encode("utf-8")
+                                col_e1, col_e2, col_e3 = st.columns([1, 2, 1])
+                                with col_e2:
+                                    st.download_button(
+                                        "📥 Download Test Plan as CSV",
+                                        data=csv_scope,
+                                        file_name="audit_scope_test_plan.csv",
+                                        mime="text/csv",
+                                        type="primary",
+                                        use_container_width=True,
+                                    )
+                    except Exception as e:
+                        st.error(f"Error analyzing scope: {e}")
