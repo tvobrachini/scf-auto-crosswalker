@@ -2,51 +2,131 @@ name: CI / Audit Engineering
 
 on:
   push:
-    branches: [ "main" ]
+    branches: ["main"]
   pull_request:
-    branches: [ "main" ]
+    branches: ["main"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  UV_VERSION: "0.8.14"
 
 jobs:
-  test:
+  pre-commit:
     runs-on: ubuntu-latest
-
     steps:
-    - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-    - name: Set up Python 3.12
-      uses: actions/setup-python@v5
-      with:
-        python-version: "3.12.3"
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12.3"
 
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install uv
-        uv sync --all-extras
+      - name: Install uv
+        run: pip install uv==${{ env.UV_VERSION }}
 
-    - name: Lint with Ruff
-      run: |
-        uv run ruff check .
-        uv run ruff format --check .
+      - name: Install dependencies
+        run: uv sync --all-extras
 
-    - name: Security SAST with Bandit
-      run: |
-        uv run bandit -c pyproject.toml -r .
+      - name: Run pre-commit hooks
+        run: uv run pre-commit run --all-files
 
-    - name: Type Check with Pyright
-      run: |
-        uv run pyright src/
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
 
-    - name: Run Pytest Suite
-      env:
-        PYTHONPATH: .
-      run: |
-        uv run pytest tests/ -v --cov=src --cov-report=term-missing --cov-fail-under=15
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12.3"
 
-    - name: Dependency Vulnerability Scan (pip-audit)
-      run: |
-        uvx pip-audit
+      - name: Install uv
+        run: pip install uv==${{ env.UV_VERSION }}
 
-    - name: Verify Docker Container Build
-      run: |
-        docker build -t scf-app-test .
+      - name: Install dependencies
+        run: uv sync --all-extras
+
+      - name: Lint with Ruff
+        run: |
+          uv run ruff check .
+          uv run ruff format --check .
+
+  typecheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12.3"
+
+      - name: Install uv
+        run: pip install uv==${{ env.UV_VERSION }}
+
+      - name: Install dependencies
+        run: uv sync --all-extras
+
+      - name: Type check with Pyright
+        run: uv run pyright src/
+
+  unit-tests:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.11", "3.12.3"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install uv
+        run: pip install uv==${{ env.UV_VERSION }}
+
+      - name: Install dependencies
+        run: uv sync --all-extras
+
+      - name: Run Pytest Suite
+        env:
+          PYTHONPATH: .
+        run: |
+          uv run pytest tests/ -v --cov=src --cov-report=term-missing --cov-fail-under=40
+
+  security:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12.3"
+
+      - name: Install uv
+        run: pip install uv==${{ env.UV_VERSION }}
+
+      - name: Install dependencies
+        run: uv sync --all-extras
+
+      - name: Security SAST with Bandit
+        run: uv run bandit -c pyproject.toml -r .
+
+      - name: Dependency vulnerability scan with pip-audit
+        run: uv run pip-audit
+
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verify Docker Container Build
+        run: docker build -t scf-app-test .

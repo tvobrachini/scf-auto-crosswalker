@@ -3,7 +3,7 @@ __pycache__/
 *.py[cod]
 *$py.class
 
-# Environments
+# Virtual environments
 .env
 .venv
 env/
@@ -13,9 +13,31 @@ env.bak/
 venv.bak/
 
 # Streamlit
-.streamlit/ secrets.toml
+.streamlit/secrets.toml
 
-# Data downloads
-scf_data.xlsx
-scf_data.csv
-scf_data.json
+# Data downloads (raw/parsed SCF data is generated at runtime)
+data/*.xlsx
+data/*.json
+data/*.npy
+
+# Lab outputs (generated files, not source)
+lab_data/sample_outputs/
+
+# IDE & OS
+.idea/
+.vscode/
+.DS_Store
+*.swp
+
+# Pytest / Coverage
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Ruff cache
+.ruff_cache/
+
+# Build artifacts
+*.egg-info/
+dist/
+build/
