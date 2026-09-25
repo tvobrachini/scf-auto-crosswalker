@@ -26,7 +26,7 @@ This manual mapping leads to human error, cognitive fatigue, and massive delays 
 
 I built **SCF Auto-Crosswalker** to fundamentally solve this bottleneck using Large Language Models (LLMs) and structured data extraction.
 
-Instead of manual spreadsheet gymnastics, the tool acts as an autonomous GRC assistant. It ingests unstructured text, policies, or complex Cloud Security JSONs and strategically routes them to the correct SCF controls, exporting the results directly into an audit-ready format.
+Instead of manual spreadsheet gymnastics, the tool acts as a GRC assistant. It ingests unstructured text, policies, or complex Cloud Security JSONs and strategically routes them to the correct SCF controls, exporting the results directly into a structured CSV format.
 
 ### Architectural Decisions:
 1. **Model Selection (Llama-3 via Groq):**
@@ -34,13 +34,13 @@ Instead of manual spreadsheet gymnastics, the tool acts as an autonomous GRC ass
    - *Why:* Speed is paramount. Mapping hundreds of AWS findings needs to happen fast. Groq provides near-instantaneous token generation.
 2. **Framework Alignment (SCF):**
    - *Decision:* Anchored the AI logic to the Secure Controls Framework (SCF).
-   - *Why:* The SCF is the gold standard for harmonizing fragmented IT regulations. If the AI maps a finding to the SCF, it automatically inherits the mappings to SOC 2, CMMC, GDPR, and ISO.
+   - *Why:* The SCF is widely used for harmonizing fragmented IT regulations. If the AI maps a finding to the SCF, it automatically inherits the mappings to SOC 2, CMMC, GDPR, and ISO.
 3. **Structured Outputs (Pydantic / LangChain):**
    - *Decision:* Forced the LLM to output rigid Pydantic JSON schemas.
    - *Why:* LLMs hallucinate text. Pydantic ensures the outputs can be programmatically converted into clean Pandas DataFrames for reliable CSV exports.
 4. **Compliance-as-Code Quality:**
    - *Decision:* Implemented `pytest` suites and GitHub Actions CI/CD pipelines.
-   - *Why:* A GRC tool needs to prove it can pass an audit itself. Strict linting and testing validate the "Audit Engineering" mindset.
+   - *Why:* The goal is to show that a compliance tool is itself tested and linted. Strict linting and testing validate the "Audit Engineering" mindset.
 
 ---
 

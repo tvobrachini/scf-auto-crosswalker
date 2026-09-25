@@ -41,7 +41,7 @@ This repository hosts the **Master SCF Control Database** (`data/scf_parsed.json
 
 ## 🛠️ Audit Engineering & Compliance-as-Code
 
-This project places a heavy emphasis on "Audit Engineering," proving that GRC tools must be built with the same rigor as the production environments they assess.
+This project applies engineering practices (containerization, locked dependencies, tests, CI) to an audit-support tool.
 
 - **Containerization:** Dockerized (`Dockerfile`, `docker-compose.yml`) for isolated, reproducible deployments.
 - **Deterministic Builds:** Migrated to `pyproject.toml` and `uv` for hash-locked dependency resolution.
