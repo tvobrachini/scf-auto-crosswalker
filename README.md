@@ -1,11 +1,14 @@
 # 🛡️ SCF Auto-Crosswalker (GRC Automation / Audit Engineering)
 
-An open-source, AI-powered internal GRC tool designed to eliminate manual spreadsheet mapping for IT Auditors and GRC Engineers.
+A personal, open-source lab project (MIT-licensed code) that uses an LLM to suggest mappings from IT policies and cloud findings to Secure Controls Framework (SCF) control IDs, to reduce manual spreadsheet work for IT auditors and GRC engineers. Suggestions are for review by a person.
+
+> [!IMPORTANT]
+> **Disclaimer:** This is an independent, personal project developed on personal time. It is not affiliated with, sponsored by or endorsed by any current or past employer.
 
 > [!NOTE]
-> **View the Complete Portfolio Case Study:** I've documented the architectural decisions, problem space, and the ROI of an AI-driven approach in **[CASE_STUDY.md](CASE_STUDY.md)**.
+> **View the Complete Portfolio Case Study:** I've documented the design decisions and problem space in **[CASE_STUDY.md](CASE_STUDY.md)**.
 
-Simply paste a raw IT policy, a procedure, or upload a Cloud Security finding (like AWS Security Hub JSON), and the engine will autonomously map it to the **Secure Controls Framework (SCF)** and append all related compliance regulations (GDPR, SOC 2, ISO 27001, NIST, PCI).
+Simply paste a raw IT policy, a procedure, or upload a Cloud Security finding (like AWS Security Hub JSON), and the engine will suggest a mapping to the **Secure Controls Framework (SCF)** and list the regulations that SCF's own crosswalk links to the mapped controls (GDPR, SOC 2, ISO 27001, NIST, PCI).
 
 ![Streamlit UI Demo](assets/ui_demo.png)
 
@@ -13,7 +16,7 @@ Simply paste a raw IT policy, a procedure, or upload a Cloud Security finding (l
 This project features three distinct tools and serves as the **Core Data Hub** for the ecosystem:
 
 ### 1. 🔍 SCF Auto-Crosswalker (Core Engine)
-Paste a raw IT policy, a procedure, or upload a massive Cloud Security JSON (e.g. AWS Security Hub findings), and the LLM engine will autonomously map it to the absolute best matching SCF domains and controls with a confidence score.
+Paste a raw IT policy, a procedure, or upload a massive Cloud Security JSON (e.g. AWS Security Hub findings), and the LLM engine suggests the closest matching SCF domains and controls, with a confidence score, for human review.
 
 ```mermaid
 graph TD
@@ -31,18 +34,18 @@ Upload a narrative Audit Scope Document (TXT/PDF) and the AI will strategically 
 > **Looking for the full Execution Swarm?** The advanced version of this tool that actually *executes* the tests using specialized agents is now located in the **[grc-audit-swarm](https://github.com/tvobrachini/grc-audit-swarm)** repository.
 
 ### 3. 📉 Compliance Gap Analyzer
-Upload a CSV listing your company's existing IT controls, select a target framework (e.g., SOC 2, HIPAA, GDPR), and instantly generate a checklist identifying exactly which baseline SCF controls are required to meet that framework.
+Upload a CSV listing your company's existing IT controls, select a target framework (e.g., SOC 2, HIPAA, GDPR), and list the SCF baseline controls that SCF's own crosswalk associates with that framework, for human review.
 
-## 🔗 Ecosystem Integration
-This repository hosts the **Master SCF Control Database** (`data/scf_parsed.json`) which is utilized by the **[GRC Audit Swarm](https://github.com/tvobrachini/grc-audit-swarm)** to provide framework-grounded mappings during multi-agent audit simulations.
+## 🔗 Related project
+The **[GRC Audit Swarm](https://github.com/tvobrachini/grc-audit-swarm)** is a separate personal project that runs audit agents. It does not read this repository's data.
 
 ## 🛠️ Audit Engineering & Compliance-as-Code
 
-This project places a heavy emphasis on "Audit Engineering," proving that GRC tools must be built with the same rigor as the production environments they assess.
+This project applies engineering practices (containerization, locked dependencies, tests, CI) to an audit-support tool.
 
-- **Enterprise Containerization:** Fully Dockerized (`Dockerfile`, `docker-compose.yml`) for isolated, reproducible deployments.
-- **Deterministic Builds:** Migrated to `pyproject.toml` and `uv` for blazing-fast, hash-locked dependency resolution.
-- **Pytest Suite:** Structured Pydantic LLM outputs are rigorously tested in `tests/test_mapper.py` to prevent hallucinations and enforce strict JSON schemas.
+- **Containerization:** Dockerized (`Dockerfile`, `docker-compose.yml`) for isolated, reproducible deployments.
+- **Deterministic Builds:** Migrated to `pyproject.toml` and `uv` for hash-locked dependency resolution.
+- **Pytest Suite:** Structured Pydantic LLM outputs are tested in `tests/test_mapper.py` to enforce strict JSON schemas. Schema validation limits malformed output; it does not prove that a mapping is correct.
 - **GitHub Actions CI/CD:** A pipeline runs automatically on every push, enforcing Python linting (`ruff`), SAST security scanning (`bandit`), dependency auditing (`pip-audit`), and container build verification.
 
 ## 🔎 View the Proof of Work (No API Key Required)
@@ -59,26 +62,18 @@ You can view the exact input files (policies, AWS findings) and the resulting CS
    ```
 4. Launch the application:
    ```bash
-   # Option A: Enterprise Docker Deployment (Requires Docker Compose)
+   # Option A: Docker (requires Docker Compose)
    docker-compose up --build -d
    # The app will be available at http://localhost:8501
 
-   # Option B: Native Fast-Boot using uv
+   # Option B: Native, using uv
    uv run streamlit run app.py
    ```
-   ```bash
-   cp .env.example .env
-   # Open .env and replace "your_api_key_here" with your actual Groq key
-   ```
-5. Launch the Streamlit interactive dashboard:
-   ```bash
-   uv run streamlit run app.py
-   ```
-6. *Upon first launch, click **"Force Update SCF Framework Data"** in the sidebar to securely download the latest framework into your local `data/` directory.*
+5. *Upon first launch, click **"Force Update SCF Framework Data"** in the sidebar to securely download the latest framework into your local `data/` directory.*
 
 ## ⚖️ Licensing & Attribution
-The AI mapping engine was engineered to be open-source and model-agnostic.
+The code in this repository is released under the [MIT License](LICENSE). It does not cover SCF data.
 
 *The control framework data utilized by this tool is owned, maintained, and copyrighted by the [Secure Controls Framework](https://securecontrolsframework.com).* The SCF is an indispensable free resource for the cybersecurity community and is licensed under the Creative Commons Attribution-NoDerivatives 4.0 International Public License.
 
-This project does not modify the underlying framework controls.
+**This repository does not host SCF data.** On first launch the app downloads the official workbook from the [SCF releases](https://github.com/securecontrolsframework/securecontrolsframework/releases) and derives a local working copy in `data/`, which is git-ignored. Do not commit or redistribute that derived file: CC BY-ND 4.0 does not allow distributing modified copies.
