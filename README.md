@@ -36,8 +36,8 @@ Upload a narrative Audit Scope Document (TXT/PDF) and the AI will strategically 
 ### 3. 📉 Compliance Gap Analyzer
 Upload a CSV listing your company's existing IT controls, select a target framework (e.g., SOC 2, HIPAA, GDPR), and list the SCF baseline controls that SCF's own crosswalk associates with that framework, for human review.
 
-## 🔗 Ecosystem Integration
-This repository hosts the **Master SCF Control Database** (`data/scf_parsed.json`) which is utilized by the **[GRC Audit Swarm](https://github.com/tvobrachini/grc-audit-swarm)** to provide framework-grounded mappings during multi-agent audit simulations.
+## 🔗 Related project
+The **[GRC Audit Swarm](https://github.com/tvobrachini/grc-audit-swarm)** is a separate personal project that runs audit agents. It does not read this repository's data.
 
 ## 🛠️ Audit Engineering & Compliance-as-Code
 
@@ -76,4 +76,4 @@ The code in this repository is released under the [MIT License](LICENSE). It doe
 
 *The control framework data utilized by this tool is owned, maintained, and copyrighted by the [Secure Controls Framework](https://securecontrolsframework.com).* The SCF is an indispensable free resource for the cybersecurity community and is licensed under the Creative Commons Attribution-NoDerivatives 4.0 International Public License.
 
-This project does not modify the underlying framework controls.
+**This repository does not host SCF data.** On first launch the app downloads the official workbook from the [SCF releases](https://github.com/securecontrolsframework/securecontrolsframework/releases) and derives a local working copy in `data/`, which is git-ignored. Do not commit or redistribute that derived file: CC BY-ND 4.0 does not allow distributing modified copies.
