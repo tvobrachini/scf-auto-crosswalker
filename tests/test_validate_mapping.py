@@ -1,4 +1,4 @@
-from src.mapper import MappedControl, MappingResult, _validate_mapping_result
+from mapper import MappedControl, MappingResult, _validate_mapping_result
 
 
 def _make_control(control_id, confidence=80):

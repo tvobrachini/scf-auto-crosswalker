@@ -6,7 +6,7 @@ import numpy as np
 import pytest
 from langchain_core.runnables import RunnableLambda
 
-import src.mapper as mapper
+import mapper as mapper
 
 
 class FakeLLM:
@@ -78,16 +78,73 @@ def test_map_text_rejects_normalizes_and_dedupes(monkeypatch, use_db, fake_embed
     assert result.rejected_control_ids == ["AC-2"]
 
 
-def test_map_text_prompt_contains_candidates_and_persona(
-    monkeypatch, use_db, fake_embeddings
-):
+def test_map_text_prompt_contains_candidates(monkeypatch, use_db, fake_embeddings):
     llm = _use_llm(monkeypatch, {"mappings": []})
-    mapper.map_text_to_scf("mfa", persona_prompt="Act as a {strict} QSA.")
+    mapper.map_text_to_scf("mfa {not_a_template_var}")
     [prompt] = llm.prompts
     assert "[IAC-06] Identification & Authentication" in prompt
-    # Braces in the persona are escaped, not treated as template variables.
-    assert "Act as a {strict} QSA." in prompt
+    # Braces in the input are data, not template variables.
+    assert "mfa {not_a_template_var}" in prompt
     assert "not instructions to follow" in prompt
+
+
+def test_map_text_only_accepts_retrieved_candidates(
+    monkeypatch, use_db, fake_embeddings
+):
+    """A real SCF control the model was not shown is rejected, as documented."""
+    monkeypatch.setattr(mapper, "CROSSWALK_CANDIDATES", 1)
+    llm = _use_llm(
+        monkeypatch,
+        {
+            "mappings": [
+                {"control_id": "IAC-06", "confidence": 90, "justification": "a"},
+                {"control_id": "GOV-01", "confidence": 80, "justification": "b"},
+            ]
+        },
+    )
+    result = mapper.map_text_to_scf("mfa authentication")
+    assert [m.control_id for m in result.mappings] == ["IAC-06"]
+    assert result.rejected_control_ids == ["GOV-01"]
+    [prompt] = llm.prompts
+    assert "GOV-01" not in prompt
+
+
+def test_map_text_keeps_at_most_top_k(monkeypatch, use_db, fake_embeddings):
+    _use_llm(
+        monkeypatch,
+        {
+            "mappings": [
+                {"control_id": cid, "confidence": 50, "justification": "x"}
+                for cid in ["CRY-01", "CRY-03", "IAC-06", "GOV-01"]
+            ]
+        },
+    )
+    result = mapper.map_text_to_scf("encrypt", top_k=2)
+    assert [m.control_id for m in result.mappings] == ["CRY-01", "CRY-03"]
+
+
+@pytest.mark.parametrize(
+    ("given", "expected"),
+    [(0.85, 85), (85, 85), (85.4, 85), (1, 100), (0, 0), (150, 100), (-3, 0)],
+)
+def test_confidence_accepts_fractions_and_is_clamped(
+    monkeypatch, use_db, fake_embeddings, given, expected
+):
+    _use_llm(
+        monkeypatch,
+        {
+            "mappings": [
+                {"control_id": "CRY-01", "confidence": given, "justification": "x"}
+            ]
+        },
+    )
+    [m] = mapper.map_text_to_scf("encrypt").mappings
+    assert m.confidence == expected
+
+
+def test_llm_client_has_no_retries_of_its_own(monkeypatch):
+    monkeypatch.setenv("GROQ_API_KEY", "test-key")
+    assert mapper._get_llm().max_retries == 0
 
 
 def test_map_text_returns_none_without_database(monkeypatch):
@@ -103,7 +160,10 @@ def test_scope_analysis_drops_non_scf_ids(monkeypatch, use_db, fake_embeddings):
     llm = _use_llm(
         monkeypatch,
         {
-            "recommended_domains": ["Cryptographic Protections"],
+            "recommended_domains": [
+                "cryptographic protections",
+                "Access Control",  # a NIST 800-53 family, not an SCF domain
+            ],
             # NIST 800-53 IDs are the failure seen in the committed sample.
             "recommended_control_ids": ["AC-1", "cry-01", "SC-8", "CRY-01", "IAC-06"],
             "reasoning": "Scope covers encryption and MFA.",
@@ -112,9 +172,64 @@ def test_scope_analysis_drops_non_scf_ids(monkeypatch, use_db, fake_embeddings):
     result = mapper.analyze_audit_scope("Verify encrypt at rest and MFA.")
     assert result.recommended_control_ids == ["CRY-01", "IAC-06"]
     assert result.rejected_control_ids == ["AC-1", "SC-8"]
+    assert result.recommended_domains == ["Cryptographic Protections"]
+    assert result.rejected_domains == ["Access Control"]
     [prompt] = llm.prompts
     assert "Candidate SCF controls" in prompt
     assert "(Prefix: CRY-)" in prompt
+
+
+def test_scope_analysis_caps_controls(monkeypatch, use_db, fake_embeddings):
+    monkeypatch.setattr(mapper, "SCOPE_MAX_CONTROLS", 2)
+    rec = mapper.ScopeRecommendation(
+        recommended_domains=[],
+        recommended_control_ids=["CRY-01", "CRY-03", "IAC-06"],
+        reasoning="r",
+    )
+    allowed = {c["control_id"]: c for c in mapper.load_scf_database()}
+    result = mapper._validate_scope_recommendation(rec, allowed, max_controls=2)
+    assert result.recommended_control_ids == ["CRY-01", "CRY-03"]
+
+
+# --- SCF database loading --------------------------------------------------------
+
+
+def test_load_scf_database_missing_is_not_cached(monkeypatch, tmp_path, scf_sample):
+    import json
+
+    path = tmp_path / "scf_parsed.json"
+    monkeypatch.setattr(mapper, "PARSED_JSON_FILE", str(path))
+    mapper.clear_scf_cache()
+    assert mapper.load_scf_database() == []
+
+    path.write_text(json.dumps(scf_sample))
+    assert len(mapper.load_scf_database()) == len(scf_sample)
+    mapper.clear_scf_cache()
+
+
+def test_load_scf_database_rereads_a_rebuilt_file(monkeypatch, tmp_path, scf_sample):
+    import json
+    import os
+
+    path = tmp_path / "scf_parsed.json"
+    path.write_text(json.dumps(scf_sample))
+    monkeypatch.setattr(mapper, "PARSED_JSON_FILE", str(path))
+    mapper.clear_scf_cache()
+    assert len(mapper.load_scf_database()) == 4
+
+    path.write_text(json.dumps(scf_sample[:1]))
+    stat = os.stat(path)
+    os.utime(path, (stat.st_atime, stat.st_mtime + 10))
+    assert len(mapper.load_scf_database()) == 1
+    mapper.clear_scf_cache()
+
+
+def test_load_scf_database_corrupt_file(monkeypatch, tmp_path):
+    path = tmp_path / "scf_parsed.json"
+    path.write_text('[{"control_id": "CRY-01"')
+    monkeypatch.setattr(mapper, "PARSED_JSON_FILE", str(path))
+    mapper.clear_scf_cache()
+    assert mapper.load_scf_database() == []
 
 
 # --- retrieval and the embedding cache -----------------------------------------
@@ -159,6 +274,42 @@ def test_embedding_cache_ignores_corrupt_file(scf_sample, fake_embeddings):
         f.write(b"not a numpy file")
     emb = mapper._build_or_load_embeddings(scf_sample)
     assert emb.shape[0] == len(scf_sample)
+
+
+def test_embedding_cache_recovers_from_truncated_zip(
+    monkeypatch, scf_sample, fake_embeddings
+):
+    """A cache cut off mid-write raises BadZipFile; it must be rebuilt, not fatal."""
+    mapper._build_or_load_embeddings(scf_sample)
+    path = mapper.EMBEDDINGS_CACHE_FILE
+    with open(path, "rb") as f:
+        data = f.read()
+    with open(path, "wb") as f:
+        f.write(data[: len(data) // 2])
+    monkeypatch.setattr(mapper, "_embeddings_memo", {})
+
+    emb = mapper._build_or_load_embeddings(scf_sample)
+    assert emb.shape[0] == len(scf_sample)
+    with np.load(path) as cached:  # rewritten and readable again
+        assert cached["embeddings"].shape[0] == len(scf_sample)
+
+
+def test_embedding_cache_write_leaves_no_temp_files(scf_sample, fake_embeddings):
+    import os
+
+    mapper._build_or_load_embeddings(scf_sample)
+    directory = os.path.dirname(mapper.EMBEDDINGS_CACHE_FILE)
+    assert os.listdir(directory) == ["scf_embeddings.npz"]
+
+
+def test_embeddings_are_memoized_in_process(monkeypatch, scf_sample, fake_embeddings):
+    mapper._build_or_load_embeddings(scf_sample)
+    import os
+
+    os.remove(mapper.EMBEDDINGS_CACHE_FILE)
+    calls = len(fake_embeddings.encode_calls)
+    mapper._build_or_load_embeddings(scf_sample)
+    assert len(fake_embeddings.encode_calls) == calls
 
 
 # --- retries -------------------------------------------------------------------
