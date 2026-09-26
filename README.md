@@ -54,7 +54,7 @@ cp .env.example .env           # then set GROQ_API_KEY in .env
 # Option A: Docker (serves on http://127.0.0.1:8501)
 docker compose up --build -d
 
-# Option B: native, with uv (Python 3.11 or 3.12)
+# Option B: native, with uv (Python 3.11 to 3.13)
 uv sync
 uv run streamlit run app.py
 ```
@@ -96,7 +96,7 @@ The suite runs without network access or API keys. It uses a bag-of-words fake i
 - **`tests/test_gap_analysis.py`** and **`tests/test_findings.py`:** gap matching and Security Hub field extraction.
 - **`tests/test_app.py`:** headless Streamlit `AppTest` runs of all three tools, including a gap analysis on the lab CSV.
 
-GitHub Actions runs pre-commit, Pyright, the tests on Python 3.11 and 3.12 (with a coverage floor of 80% on `src/`), Bandit, `pip-audit`, and a Docker build.
+GitHub Actions runs pre-commit, Pyright, the tests on Python 3.11, 3.12 and 3.13 (with a coverage floor of 80% on `src/`), Bandit, `pip-audit`, and a Docker build.
 
 ## Project structure
 

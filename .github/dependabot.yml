@@ -15,7 +15,7 @@ updates:
     schedule:
       interval: "weekly"
     ignore:
-      # pandas is locked at 2.2.0, which has no Python 3.13 wheels. Move the
-      # base image past 3.12 together with a pandas upgrade.
+      # requires-python is capped below 3.14 and CI tests up to 3.13. Take a
+      # newer base image by hand, together with a CI matrix update.
       - dependency-name: "python"
-        versions: [">=3.13"]
+        versions: [">=3.14"]
