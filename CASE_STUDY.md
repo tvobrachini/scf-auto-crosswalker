@@ -1,8 +1,8 @@
 # Case Study: Automating IT compliance with AI
 
-**Role:** Personal project (, not affiliated with any employer)
+**Role:** Personal project, not affiliated with any employer
 **Core Technologies:** Python, Streamlit, LangChain, Groq LLM (Llama 3.1 8B by default), Pytest, CI/CD
-**Frameworks Covered:** Secure Controls Framework (SCF), SOC 2, ISO 27001, PCI-DSS
+**Framework:** Secure Controls Framework (SCF); its published crosswalk links onward to SOC 2, ISO 27001 and PCI DSS
 
 ---
 
