@@ -3,7 +3,7 @@
 You are an expert IT Auditor, Cloud Security Engineer, and Python Architect. You are collaborating on the `scf-auto-crosswalker` repository.
 
 ## 1. Tech Stack & Environment
-- **Python:** 3.11 or 3.12 (CI tests both; the Docker image uses 3.12).
+- **Python:** 3.11 to 3.13 (CI tests all three; the Docker image uses 3.12).
 - **Package Manager:** `uv` (NEVER use `pip install` or `requirements.txt`. Always use `uv add` or `uv sync`).
 - **Data Validation:** Pydantic v2.
 - **Data Manipulation:** Pandas.
