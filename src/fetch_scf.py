@@ -12,6 +12,7 @@ logger = logging.getLogger(__name__)
 DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data")
 RAW_SCF_FILE = os.path.join(DATA_DIR, "scf_raw.xlsx")
 PARSED_JSON_FILE = os.path.join(DATA_DIR, "scf_parsed.json")
+META_JSON_FILE = os.path.join(DATA_DIR, "scf_meta.json")
 
 
 class SCFControl(BaseModel):
@@ -104,6 +105,24 @@ def download_scf(force: bool = False):
         return False
 
 
+def _write_meta(meta: dict) -> None:
+    try:
+        with open(META_JSON_FILE, "w", encoding="utf-8") as f:
+            json.dump(meta, f)
+    except OSError as e:
+        logger.warning("Could not record SCF release metadata: %s", e)
+
+
+def read_scf_release(meta_file: str | None = None) -> str | None:
+    """The SCF release the local database was parsed from (its sheet name, e.g. "SCF 2025.4")."""
+    try:
+        with open(meta_file or META_JSON_FILE, "r", encoding="utf-8") as f:
+            release = json.load(f).get("release")
+    except (OSError, ValueError, AttributeError):
+        return None
+    return release if isinstance(release, str) else None
+
+
 def parse_scf():
     """Parses the massive Excel file into a lightweight JSON database for the AI."""
     logger.info("Parsing SCF Excel file...")
@@ -180,20 +199,22 @@ def parse_scf():
 
         # Identify key regulatory columns (ISO, NIST, SOC 2, GDPR, CCPA, HIPAA, PCI)
         # We search the column names for these keywords to dynamically find them
+        # Compared with spaces and line breaks removed, so "NIST SP 800-53 R5",
+        # "NIST\n800-53\nrev5" and "AICPA\nSOC 2 (2017)" all match.
         framework_keywords = [
-            "soc 2",
-            "iso 27001",
-            "nist csf",
-            "nist 800-53",
+            "soc2",
+            "iso27001",
+            "nistcsf",
+            "800-53",
             "gdpr",
             "ccpa",
             "hipaa",
-            "pci dss",
+            "pcidss",
         ]
         reg_cols = []
         for col in df.columns:
-            col_lower = str(col).lower().replace("\n", " ")
-            if any(kw in col_lower for kw in framework_keywords):
+            compact = re.sub(r"\s+", "", str(col).lower())
+            if any(kw in compact for kw in framework_keywords):
                 reg_cols.append(col)
 
         logger.info(
@@ -225,6 +246,8 @@ def parse_scf():
                 weight_val = int(weight_val)
             except (TypeError, ValueError):
                 weight_val = 1
+            # Keep the control even if its weight is out of range.
+            weight_val = max(1, min(10, weight_val))
 
             erl_val = row[erl_col] if erl_col and pd.notna(row[erl_col]) else ""
             question_val = (
@@ -272,11 +295,20 @@ def parse_scf():
             )
             return False
 
-        with open(PARSED_JSON_FILE, "w", encoding="utf-8") as f:
-            json.dump(records, f, indent=2, ensure_ascii=False)
+        # Write to a temp file and rename, so a crash never leaves a truncated
+        # database behind.
+        tmp_file = PARSED_JSON_FILE + ".part"
+        try:
+            with open(tmp_file, "w", encoding="utf-8") as f:
+                json.dump(records, f, indent=2, ensure_ascii=False)
+            os.replace(tmp_file, PARSED_JSON_FILE)
+        finally:
+            if os.path.exists(tmp_file):
+                os.remove(tmp_file)
 
         logger.info("Successfully parsed %d controls.", len(records))
         logger.info("Saved lightweight AI database to %s", PARSED_JSON_FILE)
+        _write_meta({"release": target_sheet, "controls": len(records)})
         return True
 
     except Exception as e:

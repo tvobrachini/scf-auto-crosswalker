@@ -2,9 +2,9 @@
     "Findings": [
         {
             "SchemaVersion": "2018-10-08",
-            "Id": "arn:aws:securityhub:us-east-1:123456789012:subscription/aws-foundational-security-best-practices/v/1.0.0/S3.8/finding/1234abcd-12ab-34cd-56ef-1234567890ab",
+            "Id": "arn:aws:securityhub:us-east-1:123456789012:subscription/aws-foundational-security-best-practices/v/1.0.0/CloudFront.3/finding/1234abcd-12ab-34cd-56ef-1234567890ab",
             "ProductArn": "arn:aws:securityhub:us-east-1::product/aws/securityhub",
-            "GeneratorId": "aws-foundational-security-best-practices/v/1.0.0/S3.8",
+            "GeneratorId": "aws-foundational-security-best-practices/v/1.0.0/CloudFront.3",
             "AwsAccountId": "123456789012",
             "Types": [
                 "Software and Configuration Checks/Industry and Regulatory Standards/AWS Foundational Security Best Practices"
@@ -18,7 +18,7 @@
                 "Normalized": 70
             },
             "Confidence": 95,
-            "Title": "S3.8 CloudFront distributions should require encryption in transit",
+            "Title": "CloudFront.3 CloudFront distributions should require encryption in transit",
             "Description": "This finding identifies CloudFront web distributions that allow unencrypted communications via the viewer protocol policy. To prevent data interception, CloudFront distributions should be configured to 'HTTPS Only' or 'Redirect HTTP to HTTPS'.",
             "Remediation": {
                 "Recommendation": {

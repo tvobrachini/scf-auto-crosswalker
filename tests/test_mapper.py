@@ -1,5 +1,5 @@
 from unittest.mock import patch
-from src.mapper import construct_scf_context, MappedControl, ScopeRecommendation
+from mapper import construct_scf_context, MappedControl, ScopeRecommendation
 
 # --- Dummy Data ---
 DUMMY_SCF_DATA = [
@@ -55,12 +55,12 @@ def test_scope_recommendation_model():
     assert "GOV-01" in scope.recommended_control_ids
 
 
-@patch("src.mapper.load_scf_database")
+@patch("mapper.load_scf_database")
 def test_mapper_handles_empty_db(mock_load):
     """Test that the mapper gracefully handles a missing SCF database."""
     mock_load.return_value = []
 
-    from src.mapper import map_text_to_scf, analyze_audit_scope
+    from mapper import map_text_to_scf, analyze_audit_scope
 
     assert map_text_to_scf("Test policy") is None
     assert analyze_audit_scope("Test scope") is None

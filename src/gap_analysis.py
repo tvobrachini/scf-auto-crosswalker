@@ -1,11 +1,18 @@
 """Compare an existing control list with the SCF controls mapped to a framework."""
 
+import re
 from dataclasses import dataclass, field
 
 import pandas as pd
 
 STATUS_COVERED = "✅ Listed"
 STATUS_GAP = "❌ Not listed"
+
+# Status values counted as "in place" by default when the user picks a
+# status column: anything mentioning implemented/in place/active/yes, unless
+# it is negated ("not implemented") or partial/planned.
+_POSITIVE = re.compile(r"\b(implemented|in place|active|operating|effective|yes)\b")
+_NEGATIVE = re.compile(r"\b(not|no|partial(ly)?|planned|pending|in progress)\b")
 
 
 @dataclass
@@ -16,6 +23,8 @@ class GapReport:
     # IDs in the uploaded list that are not SCF control IDs. They cannot match
     # anything, which usually means the list uses its own numbering.
     unknown_ids: list[str] = field(default_factory=list)
+    # SCF IDs present in the list but excluded by the status filter.
+    excluded_by_status: list[str] = field(default_factory=list)
 
     @property
     def covered(self) -> int:
@@ -44,13 +53,44 @@ def framework_columns(scf_data: list[dict], framework: str) -> list[str]:
     return sorted(found)
 
 
+def _words(name: object) -> list[str]:
+    return re.findall(r"[a-z0-9]+", str(name).lower())
+
+
 def detect_id_column(df: pd.DataFrame) -> str:
-    """The first column named like "Control ID", else the first column."""
+    """
+    The column most likely to hold control IDs.
+
+    Prefers a column whose words are exactly "control id", "scf id" or
+    "scf control id", then any column containing the words "control" and "id"
+    (whole words, so "Control Provider" does not count), else the first column.
+    """
+    exact = {("control", "id"), ("scf", "id"), ("scf", "control", "id"), ("id",)}
     for col in df.columns:
-        name = str(col).lower()
-        if "control" in name and "id" in name:
+        if tuple(_words(col)) in exact:
+            return str(col)
+    for col in df.columns:
+        words = set(_words(col))
+        if {"control", "id"} <= words:
             return str(col)
     return str(df.columns[0])
+
+
+def detect_status_column(df: pd.DataFrame) -> str | None:
+    """A column named like "Status" or "Implementation Status", if any."""
+    for col in df.columns:
+        if "status" in _words(col):
+            return str(col)
+    return None
+
+
+def default_in_place_statuses(values: list[str]) -> list[str]:
+    """The subset of status values that read as "in place"."""
+    return [
+        v
+        for v in values
+        if _POSITIVE.search(v.lower()) and not _NEGATIVE.search(v.lower())
+    ]
 
 
 def analyze_gaps(
@@ -58,18 +98,33 @@ def analyze_gaps(
     columns: list[str],
     existing: pd.DataFrame,
     id_column: str | None = None,
+    status_column: str | None = None,
+    in_place_statuses: list[str] | None = None,
 ) -> GapReport:
     """
     List every SCF control that SCF maps to any of `columns`, and mark it as
     listed when its exact SCF control ID appears in the uploaded list.
 
-    "Listed" means only that the ID is present. It does not check that the
-    control is designed or operating effectively.
+    With `status_column`, only rows whose status is in `in_place_statuses`
+    count. "Listed" still means only that the ID is present with such a
+    status; it does not check that the control is designed or operating
+    effectively.
     """
     id_column = id_column or detect_id_column(existing)
-    existing_ids = {
-        str(v).strip().upper() for v in existing[id_column].dropna() if str(v).strip()
-    }
+
+    def ids(frame: pd.DataFrame) -> set[str]:
+        return {
+            str(v).strip().upper() for v in frame[id_column].dropna() if str(v).strip()
+        }
+
+    all_ids = ids(existing)
+    counted = existing
+    if status_column is not None:
+        allowed = {s.strip().lower() for s in (in_place_statuses or [])}
+        status = existing[status_column].astype(str).str.strip().str.lower()
+        counted = existing[status.isin(allowed)]
+    existing_ids = ids(counted)
+
     scf_ids = {c["control_id"].upper() for c in scf_data}
 
     rows = []
@@ -97,5 +152,6 @@ def analyze_gaps(
         framework_columns=list(columns),
         rows=rows,
         id_column=str(id_column),
-        unknown_ids=sorted(existing_ids - scf_ids),
+        unknown_ids=sorted(all_ids - scf_ids),
+        excluded_by_status=sorted((all_ids & scf_ids) - existing_ids),
     )

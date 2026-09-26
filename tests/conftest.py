@@ -1,7 +1,16 @@
 """Shared fakes. Nothing here touches the network, Hugging Face or Groq."""
 
+import os
+import sys
+
 import numpy as np
 import pytest
+
+# Import the modules the same way app.py does (src/ on sys.path), so tests and
+# the app share one copy of each module.
+SRC = os.path.join(os.path.dirname(os.path.dirname(__file__)), "src")
+if SRC not in sys.path:
+    sys.path.insert(0, SRC)
 
 SCF_SAMPLE = [
     {
@@ -78,11 +87,12 @@ def scf_sample():
 @pytest.fixture
 def fake_embeddings(monkeypatch, tmp_path):
     """Patch the embedding model and point the embedding cache at tmp_path."""
-    import src.mapper as mapper
+    import mapper
 
     model = FakeEmbeddingModel()
     monkeypatch.setattr(mapper, "_get_embedding_model", lambda: model)
     monkeypatch.setattr(
         mapper, "EMBEDDINGS_CACHE_FILE", str(tmp_path / "scf_embeddings.npz")
     )
+    monkeypatch.setattr(mapper, "_embeddings_memo", {})
     return model

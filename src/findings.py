@@ -1,6 +1,7 @@
 """Turn AWS Security Hub (ASFF) findings into text worth mapping."""
 
 import json
+import re
 
 
 def is_securityhub_export(data: object) -> bool:
@@ -57,3 +58,27 @@ def finding_to_text(finding: dict) -> str:
         lines.append(f"Compliance status: {status}")
 
     return "\n".join(lines)
+
+
+_CONTROL_ID = re.compile(r"^[A-Za-z0-9]+\.\d+$")
+
+
+def finding_control_id(finding: object) -> str | None:
+    """
+    The Security Hub control a finding belongs to (e.g. "CloudFront.3"), if any.
+
+    Checked in order: Compliance.SecurityControlId (consolidated control
+    findings), ProductFields.ControlId, and the last segment of GeneratorId
+    (standard-specific findings, ".../v/1.0.0/CloudFront.3").
+    """
+    if not isinstance(finding, dict):
+        return None
+    candidates = [
+        (finding.get("Compliance") or {}).get("SecurityControlId"),
+        (finding.get("ProductFields") or {}).get("ControlId"),
+        str(finding.get("GeneratorId") or "").rsplit("/", 1)[-1],
+    ]
+    for value in candidates:
+        if isinstance(value, str) and _CONTROL_ID.match(value.strip()):
+            return value.strip()
+    return None
