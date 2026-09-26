@@ -1,36 +1,48 @@
-# Use an official lightweight Python image
-FROM python:3.12-slim
+# ─── Builder stage: install the locked dependencies with uv ──────────────────
+FROM python:3.12-slim AS builder
 
-# Set environment variables
-ENV PYTHONDONTWRITEBYTECODE=1
-ENV PYTHONUNBUFFERED=1
-ENV DATA_DIR=/app/data
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    UV_LINK_MODE=copy
 
-# Set the working directory
 WORKDIR /app
 
-# Install system dependencies
-RUN apt-get update && apt-get install -y \
-    build-essential \
-    && rm -rf /var/lib/apt/lists/*
+# Pinned uv, same version as CI.
+RUN pip install --no-cache-dir uv==0.11.6
 
-# Install uv for fast package management
-RUN pip install uv
-
-# Copy the project lockfiles
+# Copy the lockfiles first so the dependency layer is cached.
 COPY pyproject.toml uv.lock ./
 
-# Install dependencies using uv deterministically
+# Every locked dependency ships a manylinux wheel for cp312, so no C toolchain
+# is needed.
+RUN uv sync --frozen --no-dev --no-install-project
+
+COPY . .
 RUN uv sync --frozen --no-dev
 
-# Copy the rest of the application
-COPY . .
+# ─── Runtime stage: slim image, non-root user ────────────────────────────────
+FROM python:3.12-slim AS runtime
 
-# Add the virtual environment to the PATH
-ENV PATH="/app/.venv/bin:$PATH"
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    HOME=/app \
+    PATH="/app/.venv/bin:$PATH"
 
-# Expose the Streamlit port
+WORKDIR /app
+
+RUN groupadd --system app && useradd --system --gid app --home-dir /app app
+
+COPY --from=builder /app /app
+
+# data/ holds the downloaded SCF workbook, the parsed database and the
+# embedding cache; ~/.cache holds the sentence-transformers model.
+RUN mkdir -p /app/data /app/.cache && chown -R app:app /app/data /app/.cache
+
+USER app
+
 EXPOSE 8501
 
-# Run the Streamlit app natively from the venv
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
+    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8501/_stcore/health')"
+
 CMD ["streamlit", "run", "app.py", "--server.port=8501", "--server.address=0.0.0.0"]

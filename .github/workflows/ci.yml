@@ -14,119 +14,122 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  UV_VERSION: "0.8.14"
+  UV_VERSION: "0.11.6"
 
 jobs:
   pre-commit:
+    name: pre-commit
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       - name: Set up Python 3.12
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
         with:
           python-version: "3.12.3"
 
       - name: Install uv
-        run: pip install uv==${{ env.UV_VERSION }}
-
-      - name: Install dependencies
-        run: uv sync --all-extras
-
-      - name: Run pre-commit hooks
-        run: uv run pre-commit run --all-files
-
-  lint:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Set up Python 3.12
-        uses: actions/setup-python@v5
+        uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
         with:
-          python-version: "3.12.3"
+          version: ${{ env.UV_VERSION }}
+          enable-cache: true
 
-      - name: Install uv
-        run: pip install uv==${{ env.UV_VERSION }}
+      - name: Sync dependencies
+        run: uv sync --frozen
 
-      - name: Install dependencies
-        run: uv sync --all-extras
-
-      - name: Lint with Ruff
-        run: |
-          uv run ruff check .
-          uv run ruff format --check .
+      # Covers ruff lint + format, detect-secrets, bandit and file hygiene.
+      - name: Run pre-commit
+        run: uv run pre-commit run --all-files --show-diff-on-failure
 
   typecheck:
+    name: typecheck
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       - name: Set up Python 3.12
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
         with:
           python-version: "3.12.3"
 
       - name: Install uv
-        run: pip install uv==${{ env.UV_VERSION }}
+        uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          version: ${{ env.UV_VERSION }}
+          enable-cache: true
 
-      - name: Install dependencies
-        run: uv sync --all-extras
+      - name: Sync dependencies
+        run: uv sync --frozen
 
       - name: Type check with Pyright
         run: uv run pyright src/
 
   unit-tests:
+    name: unit-tests (py${{ matrix.python-version }})
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
         python-version: ["3.11", "3.12.3"]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
         with:
           python-version: ${{ matrix.python-version }}
 
       - name: Install uv
-        run: pip install uv==${{ env.UV_VERSION }}
+        uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          version: ${{ env.UV_VERSION }}
+          enable-cache: true
 
-      - name: Install dependencies
-        run: uv sync --all-extras
+      - name: Sync dependencies
+        run: uv sync --frozen
 
+      # Offline: the LLM, the embedding model and the SCF download are faked.
       - name: Run Pytest Suite
         env:
           PYTHONPATH: .
-        run: |
-          uv run pytest tests/ -v --cov=src --cov-report=term-missing --cov-fail-under=40
+        run: uv run pytest tests/ --cov=src --cov-report=term-missing --cov-fail-under=80
 
   security:
+    name: security
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       - name: Set up Python 3.12
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
         with:
           python-version: "3.12.3"
 
       - name: Install uv
-        run: pip install uv==${{ env.UV_VERSION }}
+        uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          version: ${{ env.UV_VERSION }}
+          enable-cache: true
 
-      - name: Install dependencies
-        run: uv sync --all-extras
+      - name: Sync dependencies
+        run: uv sync --frozen
 
       - name: Security SAST with Bandit
         run: uv run bandit -c pyproject.toml -r .
 
+      # Audits the synced project environment (all locked runtime and dev
+      # dependencies), not pip-audit's own tool environment.
       - name: Dependency vulnerability scan with pip-audit
         run: uv run pip-audit
 
   build:
+    name: build
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       - name: Verify Docker Container Build
         run: docker build -t scf-app-test .
+
+      - name: Compose Smoke Test
+        run: docker compose config -q

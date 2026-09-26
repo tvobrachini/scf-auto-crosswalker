@@ -1,14 +1,21 @@
-version: '3.8'
-
 services:
   scf-app:
     build: .
+    # Published on localhost only: the app has no login, and anyone who can
+    # reach it can spend the Groq key.
     ports:
-      - "8501:8501"
+      - "127.0.0.1:8501:8501"
+    # Named volumes, not bind mounts: the app runs as the non-root `app` user,
+    # and Docker seeds new named volumes from the image's directories (owned
+    # by `app`), so they stay writable.
     volumes:
-      - ./data:/app/data
-      - ./.env:/app/.env:ro
-    environment:
-      - GROQ_API_KEY=${GROQ_API_KEY}
-      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - scf-data:/app/data
+      - model-cache:/app/.cache
+    env_file:
+      - path: .env
+        required: false
     restart: unless-stopped
+
+volumes:
+  scf-data:
+  model-cache:
