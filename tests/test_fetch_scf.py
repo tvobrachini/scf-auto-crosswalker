@@ -3,7 +3,7 @@ import pytest
 import requests
 from pydantic import ValidationError
 
-from src.fetch_scf import SCFControl, setup_directories
+from fetch_scf import SCFControl, setup_directories
 
 
 # --- SCFControl Pydantic schema tests ---
@@ -54,7 +54,7 @@ def test_scf_control_weight_too_low():
 
 def test_setup_directories_creates_dir(tmp_path, monkeypatch):
     target = tmp_path / "data"
-    import src.fetch_scf as fetch_scf_module
+    import fetch_scf as fetch_scf_module
 
     monkeypatch.setattr(fetch_scf_module, "DATA_DIR", str(target))
     setup_directories()
@@ -63,7 +63,7 @@ def test_setup_directories_creates_dir(tmp_path, monkeypatch):
 
 def test_setup_directories_existing_dir(tmp_path, monkeypatch):
     """Should not raise if the directory already exists."""
-    import src.fetch_scf as fetch_scf_module
+    import fetch_scf as fetch_scf_module
 
     monkeypatch.setattr(fetch_scf_module, "DATA_DIR", str(tmp_path))
     setup_directories()  # tmp_path already exists
@@ -75,23 +75,23 @@ def test_setup_directories_existing_dir(tmp_path, monkeypatch):
 
 def test_download_scf_skips_when_file_exists(tmp_path, monkeypatch):
     """Returns True immediately if the raw file is already on disk."""
-    import src.fetch_scf as fetch_scf_module
+    import fetch_scf as fetch_scf_module
 
     existing = tmp_path / "scf_raw.xlsx"
     existing.write_bytes(b"fake")
     monkeypatch.setattr(fetch_scf_module, "RAW_SCF_FILE", str(existing))
 
-    with patch("src.fetch_scf.requests.get") as mock_get:
+    with patch("fetch_scf.requests.get") as mock_get:
         result = fetch_scf_module.download_scf()
 
     assert result is True
     mock_get.assert_not_called()
 
 
-@patch("src.fetch_scf.requests.get")
+@patch("fetch_scf.requests.get")
 def test_download_scf_http_error(mock_get, tmp_path, monkeypatch):
     """Returns False and logs on HTTP errors."""
-    import src.fetch_scf as fetch_scf_module
+    import fetch_scf as fetch_scf_module
 
     monkeypatch.setattr(
         fetch_scf_module, "RAW_SCF_FILE", str(tmp_path / "missing.xlsx")
@@ -101,10 +101,10 @@ def test_download_scf_http_error(mock_get, tmp_path, monkeypatch):
     assert result is False
 
 
-@patch("src.fetch_scf.requests.get")
+@patch("fetch_scf.requests.get")
 def test_download_scf_no_xlsx_asset(mock_get, tmp_path, monkeypatch):
     """Returns False when the GitHub release has no .xlsx asset."""
-    import src.fetch_scf as fetch_scf_module
+    import fetch_scf as fetch_scf_module
 
     monkeypatch.setattr(
         fetch_scf_module, "RAW_SCF_FILE", str(tmp_path / "missing.xlsx")
@@ -146,9 +146,9 @@ def _release_response(mock_get, body_chunks, fail_midway=False):
     mock_get.side_effect = [api, download]
 
 
-@patch("src.fetch_scf.requests.get")
+@patch("fetch_scf.requests.get")
 def test_download_scf_writes_file(mock_get, tmp_path, monkeypatch):
-    import src.fetch_scf as fetch_scf_module
+    import fetch_scf as fetch_scf_module
 
     target = tmp_path / "scf_raw.xlsx"
     monkeypatch.setattr(fetch_scf_module, "RAW_SCF_FILE", str(target))
@@ -160,9 +160,9 @@ def test_download_scf_writes_file(mock_get, tmp_path, monkeypatch):
     assert not (tmp_path / "scf_raw.xlsx.part").exists()
 
 
-@patch("src.fetch_scf.requests.get")
+@patch("fetch_scf.requests.get")
 def test_download_scf_force_replaces_existing(mock_get, tmp_path, monkeypatch):
-    import src.fetch_scf as fetch_scf_module
+    import fetch_scf as fetch_scf_module
 
     target = tmp_path / "scf_raw.xlsx"
     target.write_bytes(b"old")
@@ -173,10 +173,10 @@ def test_download_scf_force_replaces_existing(mock_get, tmp_path, monkeypatch):
     assert target.read_bytes() == b"new"
 
 
-@patch("src.fetch_scf.requests.get")
+@patch("fetch_scf.requests.get")
 def test_download_scf_interrupted_keeps_previous_file(mock_get, tmp_path, monkeypatch):
     """A dropped connection must not leave a truncated workbook behind."""
-    import src.fetch_scf as fetch_scf_module
+    import fetch_scf as fetch_scf_module
 
     target = tmp_path / "scf_raw.xlsx"
     target.write_bytes(b"old")
@@ -220,13 +220,17 @@ COLUMNS = [
 def _parse(tmp_path, monkeypatch, rows, columns=COLUMNS):
     import json
 
-    import src.fetch_scf as fetch_scf_module
+    import fetch_scf as fetch_scf_module
 
     raw = tmp_path / "scf_raw.xlsx"
     parsed = tmp_path / "scf_parsed.json"
     _write_workbook(raw, rows, columns)
     monkeypatch.setattr(fetch_scf_module, "RAW_SCF_FILE", str(raw))
     monkeypatch.setattr(fetch_scf_module, "PARSED_JSON_FILE", str(parsed))
+    if fetch_scf_module.META_JSON_FILE.startswith(fetch_scf_module.DATA_DIR):
+        monkeypatch.setattr(
+            fetch_scf_module, "META_JSON_FILE", str(tmp_path / "scf_meta.json")
+        )
     ok = fetch_scf_module.parse_scf()
     records = json.loads(parsed.read_text()) if parsed.exists() else None
     return ok, records
@@ -284,3 +288,65 @@ def test_parse_scf_missing_required_columns(tmp_path, monkeypatch):
     ok, records = _parse(tmp_path, monkeypatch, [["a", "b"]], ["Foo", "Bar"])
     assert ok is False
     assert records is None
+
+
+def test_parse_scf_clamps_out_of_range_weight(tmp_path, monkeypatch):
+    rows = [
+        ["Governance", "GOV-01", "Run a program.", 15, None, None, None, None, None]
+    ]
+    ok, records = _parse(tmp_path, monkeypatch, rows)
+    assert ok is True
+    assert records[0]["weight"] == 10
+
+
+def test_parse_scf_writes_atomically_and_records_release(tmp_path, monkeypatch):
+    import fetch_scf as fetch_scf_module
+
+    meta = tmp_path / "scf_meta.json"
+    monkeypatch.setattr(fetch_scf_module, "META_JSON_FILE", str(meta))
+    rows = [["Governance", "GOV-01", "Run a program.", 5, None, None, None, None, None]]
+    ok, _ = _parse(tmp_path, monkeypatch, rows)
+    assert ok is True
+    assert not list(tmp_path.glob("*.part"))
+    assert fetch_scf_module.read_scf_release(str(meta)) == "SCF 2025.4"
+
+
+def test_read_scf_release_missing(tmp_path):
+    import fetch_scf as fetch_scf_module
+
+    assert fetch_scf_module.read_scf_release(str(tmp_path / "nope.json")) is None
+
+
+def test_parse_scf_matches_framework_columns_regardless_of_spacing(
+    tmp_path, monkeypatch
+):
+    columns = [
+        "SCF Domain",
+        "SCF #",
+        "Secure Controls Framework (SCF)\nControl Description",
+        "NIST\nSP 800-53\nR5",
+        "NIST\nCSF\n2.0",
+        "PCI\nDSS\nv4.0",
+        "ISO\n27001\nv2022",
+        "Unrelated",
+    ]
+    rows = [
+        [
+            "Crypto",
+            "CRY-03",
+            "Encrypt in transit.",
+            "SC-8",
+            "PR.DS-02",
+            "4.2.1",
+            "8.24",
+            "z",
+        ]
+    ]
+    ok, records = _parse(tmp_path, monkeypatch, rows, columns)
+    assert ok is True
+    assert records[0]["regulations"] == {
+        "NIST SP 800-53 R5": "SC-8",
+        "NIST CSF 2.0": "PR.DS-02",
+        "PCI DSS v4.0": "4.2.1",
+        "ISO 27001 v2022": "8.24",
+    }

@@ -1,23 +1,29 @@
 import os
+
 import streamlit as st
-from fetch_scf import PARSED_JSON_FILE, download_scf, parse_scf, setup_directories
-from mapper import load_scf_database
+from fetch_scf import (
+    PARSED_JSON_FILE,
+    download_scf,
+    parse_scf,
+    read_scf_release,
+    setup_directories,
+)
+from mapper import clear_scf_cache
+
+TOOLS = [
+    "🔍 SCF Auto-Crosswalker",
+    "📉 Compliance Gap Analyzer",
+    "🎯 Audit Scope Analyzer",
+]
 
 
-def render_sidebar():
-    """Renders the main navigational sidebar and returns the selected tool mode and AI persona."""
+def render_sidebar() -> str:
+    """Render the navigation sidebar and return the selected tool."""
     with st.sidebar:
         st.title("🛡️ Secure Controls Framework (SCF)")
         st.markdown("### GRC Assistant Platform")
 
-        app_mode = st.radio(
-            "Select Tool",
-            [
-                "🔍 SCF Auto-Crosswalker",
-                "📉 Compliance Gap Analyzer",
-                "🎯 Audit Scope Analyzer",
-            ],
-        )
+        app_mode = st.radio("Select Tool", TOOLS)
 
         st.markdown("---")
         st.header("⚙️ System Status")
@@ -27,8 +33,11 @@ def render_sidebar():
         )
         st.write(f"**Groq API Key:** {api_key_status}")
 
-        db_status = "🟢 Ready" if os.path.exists(PARSED_JSON_FILE) else "🔴 Not Found"
-        st.write(f"**JSON SCF Database:** {db_status}")
+        if os.path.exists(PARSED_JSON_FILE):
+            release = read_scf_release()
+            st.write(f"**SCF Database:** 🟢 {release or 'Ready'}")
+        else:
+            st.write("**SCF Database:** 🔴 Not downloaded")
 
         if st.button("🔄 Download / Update SCF Data"):
             with st.spinner("Downloading the latest SCF release from GitHub..."):
@@ -38,7 +47,7 @@ def render_sidebar():
                         # Drop the in-memory copy so every tool sees the new
                         # data. The embedding cache rebuilds itself when the
                         # control texts change.
-                        load_scf_database.clear()
+                        clear_scf_cache()
                         st.success("Downloaded and parsed the latest SCF release.")
                         st.rerun()
                     else:
@@ -46,26 +55,10 @@ def render_sidebar():
                 else:
                     st.error("Failed to download the SCF.")
 
-        # Advanced Settings specifically for Crosswalker
-        if app_mode == "🔍 SCF Auto-Crosswalker":
-            st.markdown("---")
-            st.header("⚙️ Advanced AI Settings")
-            st.markdown("Add a reviewer perspective to the model's system prompt.")
-            persona_options = [
-                "None (Default General Auditor)",
-                "Act as a strict PCI-DSS Qualified Security Assessor (QSA).",
-                "Act as a FedRAMP 3PAO Assessor focusing on US Federal standards.",
-                "Act as a GDPR Data Privacy Officer (DPO) focusing heavily on PII.",
-            ]
-            selected_persona = st.selectbox("AI Persona Lens", persona_options)
-            persona_prompt = None if "None" in selected_persona else selected_persona
-        else:
-            persona_prompt = None
-
         st.markdown("---")
         st.info(
             "SCF data © Secure Controls Framework (securecontrolsframework.com), "
             "licensed CC BY-ND 4.0. It is downloaded at runtime and not redistributed."
         )
 
-    return app_mode, persona_prompt
+    return app_mode
