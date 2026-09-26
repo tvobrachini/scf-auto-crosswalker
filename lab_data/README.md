@@ -7,7 +7,7 @@ Sample inputs for trying the three tools, and raw outputs from earlier runs. The
 | File | Used by | Notes |
 |---|---|---|
 | `sample_endpoint_policy.txt` | Crosswalker | A short endpoint encryption policy. |
-| `aws_securityhub_finding.json` | Crosswalker (batch mode) | One finding in AWS Security Hub (ASFF) export format. Its title says `S3.8`, but its text describes the CloudFront HTTPS check; the ID is a leftover from editing a sample and does not affect mapping. |
+| `aws_securityhub_finding.json` | Crosswalker (batch mode) | One finding in AWS Security Hub (ASFF) export format, for control `CloudFront.3` (CloudFront distributions should require encryption in transit). Earlier versions of this file carried the ID `S3.8` by mistake; the sample output below was generated from that version. |
 | `sample_audit_scope.txt` | Audit Scope Analyzer | A short audit scope narrative. |
 | `sample_existing_controls.csv` | Gap Analyzer | A control list that uses its **own** numbering (`SEC-01`, `IAM-01`, …). Only IDs that happen to be SCF IDs can match, so the Gap Analyzer flags the rest as "not SCF control IDs". It also shows that the tool compares IDs only: `CRY-02` is named "Data Encryption in Transit" here, and the tool does not check that the name matches SCF's `CRY-02`. |
 
