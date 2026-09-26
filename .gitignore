@@ -15,13 +15,9 @@ venv.bak/
 # Streamlit
 .streamlit/secrets.toml
 
-# Data downloads (raw/parsed SCF data is generated at runtime)
-data/*.xlsx
-data/*.json
-data/*.npy
-
-# Lab outputs (generated files, not source)
-lab_data/sample_outputs/
+# SCF data (downloaded workbook, parsed database, embedding cache) is
+# generated at runtime and must not be committed or redistributed (CC BY-ND 4.0).
+data/
 
 # IDE & OS
 .idea/

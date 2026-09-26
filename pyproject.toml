@@ -1,20 +1,26 @@
 [project]
 name = "scf-auto-crosswalker"
 version = "0.1.0"
-description = "AI-Driven SCF Crosswalker"
+description = "LLM-suggested mappings from IT policies and cloud findings to Secure Controls Framework (SCF) controls, checked against the SCF database, for human review"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "Tiago Brachini" }]
 readme = "README.md"
-requires-python = ">=3.11"
+requires-python = ">=3.11,<3.14"
+classifiers = [
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+]
 dependencies = [
-    "pandas==2.2.0",
-    "openpyxl==3.1.2",
+    "pandas>=2.2.3,<3",
+    "openpyxl>=3.1.2",
     "requests>=2.33.0,<3",
     "streamlit>=1.54.0,<2",
     "python-dotenv>=1.2.2,<2",
-    "langchain>=0.2.0",
     "langchain-groq>=0.1.0",
+    "groq>=0.9.0",
     "langchain-core>=0.2.0",
-    "langchain-openai>=0.1.0",
-    "langgraph>=0.1.0",
     "pydantic>=2.7.0",
     "pdfplumber>=0.10.3",
     "sentence-transformers>=2.7.0",
@@ -22,6 +28,10 @@ dependencies = [
     "scikit-learn>=1.4.0",
     "tenacity>=8.2.0",
 ]
+
+[project.urls]
+Repository = "https://github.com/tvobrachini/scf-auto-crosswalker"
+Issues = "https://github.com/tvobrachini/scf-auto-crosswalker/issues"
 
 [tool.bandit]
 exclude_dirs = ["tests", ".venv"]
@@ -35,7 +45,6 @@ dev = [
     "pyright>=1.1.0",
     "pytest>=9.0.2",
     "pytest-cov>=6.0.0",
-    "pytest-bdd>=8.0.0",
     "ruff>=0.15.5",
 ]
 
@@ -46,12 +55,5 @@ python_classes = ["Test*"]
 python_functions = ["test_*"]
 addopts = "-v --tb=short"
 
-[tool.pyright]
-include = ["src"]
-typeCheckingMode = "basic"
-reportAttributeAccessIssue = "none"
-reportArgumentType = "none"
-reportUnknownVariableType = "none"
-reportUnknownMemberType = "none"
-reportUnknownArgumentType = "none"
-venv = ".venv"
+# Pyright settings live in pyrightconfig.json (it takes precedence over a
+# [tool.pyright] table, so keeping both would only drift).
