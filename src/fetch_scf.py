@@ -48,9 +48,16 @@ def setup_directories():
         os.makedirs(DATA_DIR)
 
 
-def download_scf():
-    """Dynamically fetches the latest SCF Excel file from GitHub releases."""
-    if os.path.exists(RAW_SCF_FILE):
+def download_scf(force: bool = False):
+    """
+    Fetch the latest SCF Excel file from GitHub releases.
+
+    With force=False an existing download is reused. The file is written to a
+    temporary path and renamed into place only once it is complete, so an
+    interrupted download never leaves a truncated workbook that later runs
+    would treat as valid.
+    """
+    if os.path.exists(RAW_SCF_FILE) and not force:
         logger.info("Found existing SCF file at %s", RAW_SCF_FILE)
         return True
 
@@ -77,9 +84,15 @@ def download_scf():
         file_response = requests.get(download_url, stream=True, timeout=10)
         file_response.raise_for_status()
 
-        with open(RAW_SCF_FILE, "wb") as f:
-            for chunk in file_response.iter_content(chunk_size=8192):
-                f.write(chunk)
+        tmp_file = RAW_SCF_FILE + ".part"
+        try:
+            with open(tmp_file, "wb") as f:
+                for chunk in file_response.iter_content(chunk_size=8192):
+                    f.write(chunk)
+            os.replace(tmp_file, RAW_SCF_FILE)
+        finally:
+            if os.path.exists(tmp_file):
+                os.remove(tmp_file)
 
         logger.info("Successfully downloaded latest SCF Excel file.")
         return True
@@ -188,7 +201,9 @@ def parse_scf():
         )
 
         # Filter and clean
-        cols_to_keep = [id_col, domain_col, desc_col] + reg_cols
+        cols_to_keep = [id_col, desc_col] + reg_cols
+        if domain_col:
+            cols_to_keep.append(domain_col)
         if weight_col:
             cols_to_keep.append(weight_col)
         if erl_col:
@@ -208,7 +223,7 @@ def parse_scf():
             # SCF usually has weights from 1 to 10
             try:
                 weight_val = int(weight_val)
-            except ValueError:
+            except (TypeError, ValueError):
                 weight_val = 1
 
             erl_val = row[erl_col] if erl_col and pd.notna(row[erl_col]) else ""
@@ -218,10 +233,13 @@ def parse_scf():
                 else ""
             )
 
+            domain_val = (
+                row[domain_col] if domain_col and pd.notna(row[domain_col]) else ""
+            )
             record = {
-                "control_id": row[id_col],
-                "domain": row[domain_col],
-                "description": row[desc_col],
+                "control_id": str(row[id_col]).strip(),
+                "domain": str(domain_val).strip(),
+                "description": str(row[desc_col]).strip(),
                 "weight": weight_val,
                 "erl": str(erl_val).strip(),
                 "question": str(question_val).strip(),
@@ -247,6 +265,12 @@ def parse_scf():
                 continue
 
             records.append(record)
+
+        if not records:
+            logger.error(
+                "No controls passed validation; keeping the existing database."
+            )
+            return False
 
         with open(PARSED_JSON_FILE, "w", encoding="utf-8") as f:
             json.dump(records, f, indent=2, ensure_ascii=False)
