@@ -65,3 +65,20 @@ def test_lab_finding_title_matches_its_control():
         finding = json.load(f)["Findings"][0]
     assert finding_control_id(finding) == "CloudFront.3"
     assert finding["Title"].startswith("CloudFront.3 ")
+
+
+def test_cis_and_pci_generator_ids_are_not_control_ids():
+    from findings import finding_control_id
+
+    cis = "arn:aws:securityhub:::ruleset/cis-aws-foundations-benchmark/v/1.2.0/rule/1.4"
+    assert finding_control_id({"GeneratorId": cis}) is None
+    assert (
+        finding_control_id(
+            {"GeneratorId": "cis-aws-foundations-benchmark/v/1.4.0/1.10"}
+        )
+        is None
+    )
+    assert finding_control_id({"GeneratorId": "pci-dss/v/3.2.1/PCI.IAM.1"}) is None
+    assert (
+        finding_control_id({"GeneratorId": "security-control/Lambda.1"}) == "Lambda.1"
+    )

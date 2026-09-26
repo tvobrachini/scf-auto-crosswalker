@@ -60,7 +60,10 @@ def finding_to_text(finding: dict) -> str:
     return "\n".join(lines)
 
 
-_CONTROL_ID = re.compile(r"^[A-Za-z0-9]+\.\d+$")
+# Security Hub control IDs look like "CloudFront.3" or "IAM.6". Requiring a
+# leading letter keeps CIS rule numbers ("1.4", from GeneratorIds such as
+# ".../cis-aws-foundations-benchmark/v/1.2.0/rule/1.4") from being read as one.
+_CONTROL_ID = re.compile(r"^[A-Za-z][A-Za-z0-9]*\.\d+$")
 
 
 def finding_control_id(finding: object) -> str | None:

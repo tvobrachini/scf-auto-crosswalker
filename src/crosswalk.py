@@ -24,6 +24,7 @@ class CrosswalkResult:
     input: CrosswalkInput
     mappings: list[MappedControl] = field(default_factory=list)
     rejected: list[str] = field(default_factory=list)
+    capped: list[str] = field(default_factory=list)
     error: str | None = None
 
 
@@ -54,6 +55,7 @@ def run_crosswalk(
                 else:
                     cached.mappings = list(mapped.mappings)
                     cached.rejected = list(mapped.rejected_control_ids)
+                    cached.capped = list(mapped.capped_control_ids)
             except Exception as e:  # reported per input in the UI
                 cached.error = f"{type(e).__name__}: {e}"
             by_text[item.text] = cached
@@ -62,6 +64,7 @@ def run_crosswalk(
                 input=item,
                 mappings=cached.mappings,
                 rejected=cached.rejected,
+                capped=cached.capped,
                 error=cached.error,
             )
         )
@@ -98,8 +101,11 @@ def aggregate(results: list[CrosswalkResult], scf_dict: dict[str, dict]) -> list
     Merge batch results per SCF control and rank them.
 
     Priority Score = SCF relative weight x sum of model confidences / 100,
-    i.e. confidence-weighted hits, so ten 10%-confidence hits count the same
-    as one 100%-confidence hit.
+    summed over *distinct* findings: each hit counts in proportion to the
+    model's confidence (a 10% hit adds a tenth of a 100% hit), and a control
+    failing on many resources, which Security Hub reports as many identical
+    findings, counts once. "Findings" counts every finding, duplicates
+    included.
     """
     merged: dict[str, dict] = {}
     for r in results:
@@ -111,16 +117,16 @@ def aggregate(results: list[CrosswalkResult], scf_dict: dict[str, dict]) -> list
                     "SCF Domain": m.domain,
                     "Control Description": m.description,
                     "Weight": scf_dict.get(m.control_id, {}).get("weight", 1),
-                    "Hit Count": 0,
-                    "_confidence_sum": 0,
+                    "Findings": 0,
+                    "_texts": {},
                     "_best": -1,
                     "Sample Model Justification": "",
                     "Source Controls": [],
                     "Regulations": m.regulations,
                 },
             )
-            row["Hit Count"] += 1
-            row["_confidence_sum"] += m.confidence
+            row["Findings"] += 1
+            row["_texts"][r.input.text] = m.confidence
             if m.confidence > row["_best"]:
                 row["_best"] = m.confidence
                 row["Sample Model Justification"] = m.justification
@@ -130,10 +136,11 @@ def aggregate(results: list[CrosswalkResult], scf_dict: dict[str, dict]) -> list
 
     rows = []
     for row in merged.values():
-        conf_sum = row.pop("_confidence_sum")
+        confidences = list(row.pop("_texts").values())
         row.pop("_best")
-        row["Average Model Confidence (%)"] = round(conf_sum / row["Hit Count"])
-        row["Priority Score"] = round(row["Weight"] * conf_sum / 100, 2)
+        row["Distinct Findings"] = len(confidences)
+        row["Average Model Confidence (%)"] = round(sum(confidences) / len(confidences))
+        row["Priority Score"] = round(row["Weight"] * sum(confidences) / 100, 2)
         rows.append(row)
     rows.sort(key=lambda r: (-r["Priority Score"], r["SCF Control ID"]))
     return rows

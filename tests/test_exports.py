@@ -68,7 +68,21 @@ def test_oscal_groups_sources_and_merges_duplicates():
 
     [statement_map] = statement_mapping["maps"]
     assert statement_map["sources"] == [{"type": "statement", "id-ref": "input-3"}]
-    assert statement_mapping["target-resource"]["type"] == "catalog"
+    assert statement_mapping["target-resource"]["type"] == "control-framework"
+
+    # Every #uuid reference resolves to a back-matter resource.
+    resources = {r["uuid"]: r for r in doc["back-matter"]["resources"]}
+    for mapping in doc["mappings"]:
+        for side in ("source-resource", "target-resource"):
+            href = mapping[side]["href"]
+            assert href.startswith("#") and href[1:] in resources
+    scf = resources[control_mapping["target-resource"]["href"][1:]]
+    assert scf["title"] == "Secure Controls Framework (SCF), SCF 2025.4"
+    assert scf["rlinks"][0]["href"].startswith(
+        "https://github.com/securecontrolsframework/"
+    )
+    inputs = resources[statement_mapping["source-resource"]["href"][1:]]
+    assert "input-3: policy.txt" in inputs["description"]
 
 
 def test_oscal_output_validates_against_trestle_models():

@@ -108,6 +108,28 @@ def test_score_model():
     assert m.precision == pytest.approx(1 / 3)
     assert m.hit_rate == pytest.approx(1 / 3)
     assert m.empty == 1
+    assert m.errors == 0
+
+
+def test_score_model_survives_failing_calls():
+    cases = [GoldCase("a", "ta", {"X-01"}, []), GoldCase("b", "tb", {"Y-01"}, [])]
+
+    def suggest(text):
+        if text == "ta":
+            raise RuntimeError("429 after retries")
+        return ["Y-01"]
+
+    m = score_model(cases, suggest)
+    assert m.errors == 1
+    assert m.hit_rate == 0.5
+    assert m.precision == 1.0
+
+
+def test_score_retrieval_keeps_duplicate_case_ids_apart():
+    cases = [GoldCase("", "ta", {"X-01"}, []), GoldCase("", "tb", {"Y-01"}, [])]
+    ranking = {"ta": ["X-01"], "tb": ["Z-01"]}
+    [s] = score_retrieval(cases, lambda t, k: ranking[t], ks=(1,))
+    assert s.hit_rate == 0.5
 
 
 def test_results_markdown():
@@ -150,3 +172,5 @@ def test_run_eval_cli_end_to_end(monkeypatch, tmp_path, fake_embeddings):
     results = (tmp_path / "results.md").read_text()
     assert "cases: 2" in results
     assert "Hit rate @50 | 100.0%" in results  # 4 controls, all retrieved at k=50
+
+    assert run_eval.main(["--controls", str(controls), "--column", "Typo"]) == 1
