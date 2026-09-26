@@ -1,0 +1,21 @@
+version: 2
+updates:
+  - package-ecosystem: "uv" # Python dependencies (uv.lock)
+    directory: "/"
+    schedule:
+      interval: "weekly"
+
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+
+  - package-ecosystem: "docker"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    ignore:
+      # requires-python is capped below 3.14 and CI tests up to 3.13. Take a
+      # newer base image by hand, together with a CI matrix update.
+      - dependency-name: "python"
+        versions: [">=3.14"]
