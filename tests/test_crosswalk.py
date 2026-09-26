@@ -90,7 +90,8 @@ def test_priority_score_is_confidence_weighted():
     scf = {"GOV-01": {"weight": 5}, "CRY-01": {"weight": 5}}
     rows = aggregate(run_crosswalk(inputs, fake), scf)
     by_id = {r["SCF Control ID"]: r for r in rows}
-    assert by_id["GOV-01"]["Hit Count"] == 3
+    assert by_id["GOV-01"]["Findings"] == 3
+    assert by_id["GOV-01"]["Distinct Findings"] == 3
     assert by_id["GOV-01"]["Priority Score"] == 4.0  # 5 * (10+10+60)/100
     assert by_id["CRY-01"]["Priority Score"] == 4.75  # 5 * 95/100
     assert rows[0]["SCF Control ID"] == "CRY-01"
@@ -112,3 +113,29 @@ def test_detail_rows_and_rejected():
         ("B", "", "CRY-03"),
     ]
     assert all_rejected(results) == ["AC-2", "SC-8"]
+
+
+def test_identical_findings_count_once_in_the_ranking():
+    """A control failing on many resources must not outrank by volume alone."""
+    many = [CrosswalkInput(f"F{i}", "same text", "S3.1") for i in range(100)]
+    one = [CrosswalkInput("G", "other text", "IAM.6")]
+    fake = FakeMapper(
+        {"same text": [_mapped("DCH-01", 40)], "other text": [_mapped("IAC-06", 90)]}
+    )
+    rows = aggregate(run_crosswalk(many + one, fake), {})
+    by_id = {r["SCF Control ID"]: r for r in rows}
+    assert by_id["DCH-01"]["Findings"] == 100
+    assert by_id["DCH-01"]["Distinct Findings"] == 1
+    assert by_id["DCH-01"]["Priority Score"] == 0.4
+    assert rows[0]["SCF Control ID"] == "IAC-06"
+
+
+def test_capped_ids_are_carried_through():
+    class Capped:
+        def __call__(self, text, top_k):
+            return MappingResult(
+                mappings=[_mapped("CRY-01", 90)], capped_control_ids=["GOV-01"]
+            )
+
+    [r] = run_crosswalk([CrosswalkInput("A", "a")], Capped())
+    assert r.capped == ["GOV-01"]

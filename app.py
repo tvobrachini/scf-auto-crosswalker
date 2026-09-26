@@ -8,6 +8,7 @@ load_dotenv()
 # Ensure the src directory is available for imports
 sys.path.append(os.path.join(os.path.dirname(__file__), "src"))
 
+import hashlib  # noqa: E402
 import json  # noqa: E402
 import re  # noqa: E402
 
@@ -70,6 +71,33 @@ _MD_SPECIAL = re.compile(r"([\\`*_{}\[\]()#+\-.!|<>~$:])")
 
 def md_escape(text: str) -> str:
     return _MD_SPECIAL.sub(r"\\\1", str(text))
+
+
+def fingerprint(*parts: object) -> str:
+    """
+    A stable digest of the inputs a result was computed from.
+
+    Results are kept in session state (so a download click, which reruns the
+    script, does not clear them) together with this digest, and are shown
+    only while the current inputs still match. Otherwise a result, and its
+    exports, could be attributed to an input that is no longer on screen.
+    """
+    return hashlib.sha256(
+        json.dumps(parts, sort_keys=True, default=str).encode("utf-8")
+    ).hexdigest()
+
+
+def show_if_current(key: str, current: str):
+    """The stored result for `key` if it was computed from `current` inputs."""
+    state = st.session_state.get(key)
+    if not state:
+        return None
+    if state["fingerprint"] != current:
+        st.info(
+            "The inputs changed since the last run. Run the analysis again to see results."
+        )
+        return None
+    return state
 
 
 def load_lab_files(extension: str | tuple[str, ...] | None = None):
@@ -281,6 +309,8 @@ if app_mode == "🔍 SCF Auto-Crosswalker":
             )
         ]
 
+    cw_fingerprint = fingerprint([(i.label, i.text, i.source_id) for i in inputs])
+
     st.caption(GROQ_NOTICE)
     col1, col2, col3 = st.columns([1, 1, 1])
     if col2.button(
@@ -290,6 +320,7 @@ if app_mode == "🔍 SCF Auto-Crosswalker":
         key="cw_btn",
     ):
         scf_db = load_scf_database()
+        st.session_state.pop("cw_results", None)
         if not inputs:
             st.warning(
                 "Please provide some text, select a lab file, or upload a document to proceed."
@@ -315,9 +346,10 @@ if app_mode == "🔍 SCF Auto-Crosswalker":
             st.session_state["cw_results"] = {
                 "results": results,
                 "is_batch": bool(batch_findings),
+                "fingerprint": cw_fingerprint,
             }
 
-    state = st.session_state.get("cw_results")
+    state = show_if_current("cw_results", cw_fingerprint)
     if state:
         results = state["results"]
         scf_dict = {c["control_id"]: c for c in load_scf_database()}
@@ -329,6 +361,11 @@ if app_mode == "🔍 SCF Auto-Crosswalker":
         if not state["is_batch"]:
             [r] = results
             render_rejected(r.rejected)
+            if r.capped:
+                st.caption(
+                    f"The model also suggested {md_escape(', '.join(r.capped))}, "
+                    "beyond the top 3; not shown."
+                )
             if r.mappings:
                 st.success("Suggestions ready. Review each one.")
                 st.markdown("### Suggested Controls")
@@ -355,11 +392,12 @@ if app_mode == "🔍 SCF Auto-Crosswalker":
             st.info(
                 f"Suggestions for {len(results)} findings ({unique_model_calls([r.input for r in results])} distinct), "
                 "merged by control and ranked by Priority Score: SCF relative weight × the sum of "
-                "model confidences / 100 across the findings that mapped to it."
+                "model confidences / 100 across the distinct findings that mapped to it (identical "
+                "findings, such as one control failing on many resources, count once)."
             )
             for m_idx, row in enumerate(summary):
                 with st.expander(
-                    f"#{m_idx + 1} | {row['SCF Control ID']} (Score: {row['Priority Score']}) | Hits: {row['Hit Count']}",
+                    f"#{m_idx + 1} | {row['SCF Control ID']} (Score: {row['Priority Score']}) | Findings: {row['Findings']}",
                     expanded=(m_idx < 3),
                 ):
                     st.markdown(
@@ -517,6 +555,17 @@ elif app_mode == "📉 Compliance Gap Analyzer":
             else:
                 st.info("Awaiting input data...")
 
+        gap_fingerprint = fingerprint(
+            selected_columns,
+            id_column,
+            status_column,
+            sorted(in_place),
+            None
+            if df_existing is None
+            else int(pd.util.hash_pandas_object(df_existing, index=True).sum()),
+            list(df_existing.columns) if df_existing is not None else None,
+        )
+
         st.markdown("---")
         colbtn1, colbtn2, colbtn3 = st.columns([1, 1, 1])
         if colbtn2.button(
@@ -542,9 +591,10 @@ elif app_mode == "📉 Compliance Gap Analyzer":
                         in_place,
                     ),
                     "framework": target_framework,
+                    "fingerprint": gap_fingerprint,
                 }
 
-        gap_state = st.session_state.get("gap_report")
+        gap_state = show_if_current("gap_report", gap_fingerprint)
         if gap_state:
             report = gap_state["report"]
             framework_label = report.framework_columns[0]
@@ -682,6 +732,8 @@ elif app_mode == "🎯 Audit Scope Analyzer":
                 except Exception as e:
                     st.error(f"Error reading file: {e}")
 
+        scope_fingerprint = fingerprint(scope_text)
+
         st.markdown("---")
         st.caption(GROQ_NOTICE)
         col1, col2, col3 = st.columns([1, 1, 1])
@@ -691,6 +743,7 @@ elif app_mode == "🎯 Audit Scope Analyzer":
             width="stretch",
             key="scope_btn",
         ):
+            st.session_state.pop("scope_result", None)
             if not scope_text.strip():
                 st.warning("Please paste or upload an audit scope document.")
             elif not os.environ.get("GROQ_API_KEY"):
@@ -700,18 +753,27 @@ elif app_mode == "🎯 Audit Scope Analyzer":
                     "Retrieving candidate controls and asking the model..."
                 ):
                     try:
-                        st.session_state["scope_result"] = analyze_audit_scope(
-                            scope_text
-                        )
+                        analysis = analyze_audit_scope(scope_text)
                     except Exception as e:
-                        st.session_state.pop("scope_result", None)
+                        analysis = None
                         st.error(f"Error analyzing scope: {md_escape(e)}")
+                    if analysis is not None:
+                        st.session_state["scope_result"] = {
+                            "result": analysis,
+                            "fingerprint": scope_fingerprint,
+                        }
 
-        result = st.session_state.get("scope_result")
+        scope_state = show_if_current("scope_result", scope_fingerprint)
+        result = scope_state["result"] if scope_state else None
         if result:
             st.success("Suggestions ready. Review each one.")
             render_rejected(result.rejected_control_ids)
             render_rejected(result.rejected_domains, what="domain names")
+            if result.capped_control_ids:
+                st.caption(
+                    f"The model also suggested {md_escape(', '.join(result.capped_control_ids))}, "
+                    "beyond the 10-control limit; not shown."
+                )
 
             scf_dict = {c["control_id"]: c for c in scf_db}
             col_d, col_c = st.columns([1, 1])

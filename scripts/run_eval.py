@@ -61,6 +61,9 @@ def main(argv: list[str] | None = None) -> int:
     column = nist_800_53_column(scf_data, args.column)
 
     if args.controls:
+        if column is None and args.column:
+            print(f"The SCF data has no crosswalk column named {args.column!r}.")
+            return 1
         if column is None:
             print("No NIST 800-53 column in the SCF data; pass --column.")
             return 1

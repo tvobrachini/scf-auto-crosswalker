@@ -35,7 +35,7 @@ def to_safe_csv(df: pd.DataFrame) -> bytes:
 # --- OSCAL ----------------------------------------------------------------------
 
 OSCAL_VERSION = "1.2.1"
-SCF_HREF = "https://securecontrolsframework.com/"
+SCF_HREF = "https://github.com/securecontrolsframework/securecontrolsframework/releases"
 SECURITY_HUB_HREF = "https://docs.aws.amazon.com/securityhub/latest/userguide/securityhub-controls-reference.html"
 
 MAPPING_DESCRIPTION = (
@@ -60,7 +60,8 @@ def oscal_mapping_collection(
 ) -> dict:
     """
     Build an OSCAL mapping-collection (OSCAL 1.2 mapping model) from crosswalk
-    results, as a JSON-ready dict.
+    results, as a JSON-ready dict. Callers should only export results that
+    have at least one mapping.
 
     Inputs with a Security Hub control ID become `control` sources in a
     mapping whose source resource is the Security Hub controls reference.
@@ -84,10 +85,39 @@ def oscal_mapping_collection(
                     "label": r.input.label,
                 }
 
-    resources = {
-        "control": {"type": "aws-security-hub-controls", "href": SECURITY_HUB_HREF},
-        "statement": {"type": "input-document", "href": "#inputs"},
+    # Neither the SCF nor the Security Hub controls reference is published as
+    # an OSCAL catalog, so the source and target resources are typed with
+    # their own tokens and point, by UUID, to back-matter resources that link
+    # to where each is published.
+    scf_resource = {
+        "uuid": str(uuid.uuid4()),
+        "title": "Secure Controls Framework (SCF)"
+        + (f", {scf_version}" if scf_version else ""),
+        "description": "SCF control catalog workbook, as published on GitHub.",
+        "rlinks": [{"href": SCF_HREF}],
     }
+    hub_resource = {
+        "uuid": str(uuid.uuid4()),
+        "title": "AWS Security Hub controls reference",
+        "rlinks": [{"href": SECURITY_HUB_HREF}],
+    }
+    statement_labels = [
+        f"input-{index}: {r.input.label}"
+        for index, r in enumerate(results, start=1)
+        if not r.input.source_id and r.mappings
+    ]
+    inputs_resource = {
+        "uuid": str(uuid.uuid4()),
+        "title": "Crosswalk inputs",
+        "description": "Text inputs mapped by SCF Auto-Crosswalker, by statement ID: "
+        + "; ".join(statement_labels),
+    }
+
+    resources = {
+        "control": ("aws-security-hub-controls", hub_resource),
+        "statement": ("input-document", inputs_resource),
+    }
+    used = [scf_resource]
 
     mappings = []
     for kind, pairs in groups.items():
@@ -105,11 +135,19 @@ def oscal_mapping_collection(
                     "remarks": f"{info['label']}: {info['justification']}",
                 }
             )
+        source_type, source_resource = resources[kind]
+        used.append(source_resource)
         mappings.append(
             {
                 "uuid": str(uuid.uuid4()),
-                "source-resource": resources[kind],
-                "target-resource": {"type": "catalog", "href": SCF_HREF},
+                "source-resource": {
+                    "type": source_type,
+                    "href": f"#{source_resource['uuid']}",
+                },
+                "target-resource": {
+                    "type": "control-framework",
+                    "href": f"#{scf_resource['uuid']}",
+                },
                 "maps": maps,
             }
         )
@@ -132,5 +170,6 @@ def oscal_mapping_collection(
                 "mapping-description": MAPPING_DESCRIPTION,
             },
             "mappings": mappings,
+            "back-matter": {"resources": used},
         }
     }

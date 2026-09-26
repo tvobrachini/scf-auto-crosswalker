@@ -81,7 +81,7 @@ This file records the design decisions as the code implements them today. Each r
 - An 8B model makes weaker choices than larger models; the committed samples include weak matches. Any Groq model can be set through `GROQ_MODEL`.
 - Temperature 0 lowers variance but does not make the output deterministic.
 - `_invoke_chain` retries only rate limits, timeouts, connection errors and 5xx responses (at most 3 attempts, exponential backoff). The Groq client's own retries are turned off (`max_retries=0`), so this is the only retry layer. Authentication and bad-request errors fail at once instead of retrying for each finding in a batch.
-- In batch mode, identical finding texts are sent once (`src/crosswalk.py`), at most 50 distinct findings are mapped per batch, and an error on one finding is reported on that finding without stopping the batch.
+- In batch mode, identical finding texts are sent once (`src/crosswalk.py`), at most 50 distinct findings are mapped per batch, and an error on one finding is reported on that finding without stopping the batch. The ranking sums model confidences over distinct findings, so a control failing on many resources counts once.
 - The submitted text is sent to Groq. The UI and SECURITY.md say so.
 
 ---
@@ -119,13 +119,14 @@ This file records the design decisions as the code implements them today. Each r
 **Decision.** `oscal_mapping_collection` (`src/exports.py`) turns crosswalk results into an OSCAL 1.2 `mapping-collection`:
 
 - **Provenance:** method `automation`, matching rationale `semantic`, status `draft`, and a mapping description that says the maps are unreviewed model suggestions.
-- **Sources:** Security Hub control IDs (such as `CloudFront.3`, from `Compliance.SecurityControlId`, `ProductFields.ControlId` or the `GeneratorId`) are `control` items under a source resource that points to the Security Hub controls reference. Pasted text and documents are `statement` items.
-- **Targets:** SCF controls, in a `catalog` target resource.
+- **Sources:** Security Hub control IDs (such as `CloudFront.3`, from `Compliance.SecurityControlId`, `ProductFields.ControlId` or the last `GeneratorId` segment, which must start with a letter so CIS rule numbers such as `1.4` are not mistaken for one) are `control` items. Pasted text and documents are `statement` items (`input-N`), listed by label in a back-matter resource.
+- **Targets:** SCF controls.
+- **Resources:** neither the SCF workbook nor the Security Hub controls reference is an OSCAL catalog, so the source and target resources use their own type tokens (`aws-security-hub-controls`, `input-document`, `control-framework`) and point by `#uuid` to back-matter resources whose `rlinks` give the published locations.
 - **Maps:** every map uses the relationship `intersects-with` and carries the model's confidence as `confidence-score.percentage` and its justification in `remarks`. Duplicate source–target pairs are merged, keeping the highest confidence.
 - The SCF release is recorded in the metadata remarks.
 
 **Consequences.**
-- The output can be loaded by OSCAL tooling. `tests/test_exports.py` parses it with compliance-trestle's OSCAL models (a dev-only dependency).
+- The output parses as an OSCAL mapping-collection: `tests/test_exports.py` validates it with compliance-trestle's OSCAL models (a dev-only dependency) and checks that every `#uuid` reference resolves to a back-matter resource. Tools that resolve the sources and targets as OSCAL catalogs cannot, because none exists for either side.
 - `intersects-with` is the weakest positive relationship in NIST IR 8477. The tool does not establish subset, superset or equality, so it does not claim them. A reviewer who confirms a map can tighten the relationship and change the status.
 - OSCAL's mapping model is designed for control-to-control mappings. Policy text and documents are not controls, so they are modeled as `statement` sources under a local `#inputs` resource; the text itself is not embedded in the export.
 

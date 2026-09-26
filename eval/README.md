@@ -38,7 +38,8 @@ The results table is written to `eval/results.md`.
 | Retrieval | Mean recall @k | Mean share of each case's gold controls found in the top k. |
 | Model | Precision of suggestions | Share of the controls the pipeline suggested (up to 3 per case) that are gold. |
 | Model | Hit rate | Share of cases with at least one gold suggestion. |
-| Model | Cases with no valid suggestion | Cases where every ID the model returned was rejected. |
+| Model | Cases with no suggestion | Cases where the pipeline suggested nothing: the model returned no IDs, or every ID it returned was rejected. |
+| Model | Cases where the call failed | Cases where the Groq call failed after retries. They are skipped, not retried, and count as misses in the hit rate. |
 
 ## Results
 

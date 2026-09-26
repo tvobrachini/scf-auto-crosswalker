@@ -163,3 +163,45 @@ def test_scope_analyzer_success(fake_model):
     assert "Access Control" in warnings  # not an SCF domain
     assert not any("](https://evil" in i.value for i in at.info)
     assert _download_labels(at) == ["📥 Download Test Plan as CSV"]
+
+
+def test_crosswalker_hides_results_when_the_input_changes(fake_model):
+    at = _app("🔍 SCF Auto-Crosswalker")
+    at.text_area[0].set_value("Require HTTPS encrypt in transit").run()
+    at.button(key="cw_btn").click().run()
+    assert any("CRY-03" in e.label for e in at.expander)
+
+    at.text_area[0].set_value("HR onboarding checklist").run()
+    assert not any("CRY-03" in e.label for e in at.expander)
+    assert _download_labels(at) == []
+    assert any("inputs changed" in i.value for i in at.info)
+
+    # Changing back to the original input shows its results again.
+    at.text_area[0].set_value("Require HTTPS encrypt in transit").run()
+    assert any("CRY-03" in e.label for e in at.expander)
+
+    # A click that fails validation clears old results.
+    at.text_area[0].set_value("   ").run()
+    at.button(key="cw_btn").click().run()
+    at.text_area[0].set_value("Require HTTPS encrypt in transit").run()
+    assert not any("CRY-03" in e.label for e in at.expander)
+
+
+def test_gap_results_hidden_when_status_filter_changes(scf_db):
+    at = _app("📉 Compliance Gap Analyzer")
+    at.selectbox(key="gap_lab").set_value("sample_existing_controls.csv").run()
+    at.button(key="gap_btn").click().run()
+    assert any(m.label == "SCF controls mapped" for m in at.metric)
+
+    status = next(s for s in at.selectbox if s.label == "Status column")
+    status.set_value("(ignore status)").run()
+    assert not any(m.label == "SCF controls mapped" for m in at.metric)
+
+
+def test_scope_results_hidden_when_scope_changes(fake_model):
+    at = _app("🎯 Audit Scope Analyzer")
+    at.text_area[0].set_value("Verify encryption at rest and MFA.").run()
+    at.button(key="scope_btn").click().run()
+    assert _download_labels(at) == ["📥 Download Test Plan as CSV"]
+    at.text_area[0].set_value("A different scope.").run()
+    assert _download_labels(at) == []

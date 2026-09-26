@@ -135,12 +135,13 @@ def score_retrieval(
 ) -> list[RetrievalScores]:
     """Score `retrieve(text, k) -> ranked control IDs` at each k (one call at max k)."""
     ks = sorted(ks)
-    ranked = {c.case_id: retrieve(c.text, ks[-1]) for c in cases}
+    # Keyed by position, so duplicate or empty case IDs never merge cases.
+    ranked = [retrieve(c.text, ks[-1]) for c in cases]
     scores = []
     for k in ks:
         hits, recalls = 0, 0.0
-        for c in cases:
-            top = set(ranked[c.case_id][:k])
+        for c, ranking in zip(cases, ranked):
+            top = set(ranking[:k])
             found = len(c.gold & top)
             hits += found > 0
             recalls += found / len(c.gold)
@@ -154,16 +155,26 @@ class ModelScores:
     cases: int
     precision: float  # share of suggested controls that are gold
     hit_rate: float  # share of cases with at least one gold suggestion
-    empty: int  # cases where the model returned no valid control
+    empty: int  # cases with no suggestion (nothing returned, or all rejected)
+    errors: int = 0  # cases where the call failed (after retries)
 
 
 def score_model(
     cases: list[GoldCase], suggest: Callable[[str], list[str]]
 ) -> ModelScores:
-    """Score `suggest(text) -> suggested control IDs` (the full pipeline)."""
-    suggested_total, correct_total, hits, empty = 0, 0, 0, 0
+    """
+    Score `suggest(text) -> suggested control IDs` (the full pipeline).
+
+    A failed call is counted in `errors` and does not stop the run; errors
+    and empty answers both count as misses in `hit_rate`.
+    """
+    suggested_total, correct_total, hits, empty, errors = 0, 0, 0, 0, 0
     for c in cases:
-        ids = suggest(c.text)
+        try:
+            ids = suggest(c.text)
+        except Exception:  # one failing case must not lose the whole run
+            errors += 1
+            continue
         if not ids:
             empty += 1
             continue
@@ -177,6 +188,7 @@ def score_model(
         precision=correct_total / suggested_total if suggested_total else 0.0,
         hit_rate=hits / n,
         empty=empty,
+        errors=errors,
     )
 
 
@@ -203,5 +215,6 @@ def results_markdown(
         lines.append(
             f"| {label} | Hit rate (≥1 gold suggestion) | {model.hit_rate:.1%} |"
         )
-        lines.append(f"| {label} | Cases with no valid suggestion | {model.empty} |")
+        lines.append(f"| {label} | Cases with no suggestion | {model.empty} |")
+        lines.append(f"| {label} | Cases where the call failed | {model.errors} |")
     return "\n".join(lines) + "\n"

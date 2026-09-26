@@ -1,6 +1,7 @@
 import hashlib
 import json
 import logging
+import math
 import os
 import tempfile
 
@@ -50,10 +51,12 @@ def _to_percent(value: float) -> int:
     Model confidence as an integer percentage.
 
     The schema asks for 0-100, but small models sometimes answer with a
-    fraction (0.85). Values in (0, 1] are read as fractions; everything is
-    then clamped to [0, 100].
+    fraction (0.85). Values strictly between 0 and 1 are read as fractions
+    (so 1 stays 1%); NaN counts as 0; everything is clamped to [0, 100].
     """
-    if 0 < value <= 1:
+    if math.isnan(value):
+        return 0
+    if 0 < value < 1:
         value *= 100
     return int(round(max(0.0, min(100.0, value))))
 
@@ -127,6 +130,10 @@ class MappingResult(BaseModel):
         default_factory=list,
         description="IDs the model returned that are not among the candidate SCF controls it was given.",
     )
+    capped_control_ids: list[str] = Field(
+        default_factory=list,
+        description="Valid IDs the model returned beyond top_k, which are not shown.",
+    )
 
 
 class ScopeAnalysis(BaseModel):
@@ -142,13 +149,17 @@ class ScopeAnalysis(BaseModel):
         default_factory=list,
         description="Domain names the model returned that are not SCF domains.",
     )
+    capped_control_ids: list[str] = Field(
+        default_factory=list,
+        description="Valid IDs the model returned beyond the maximum, which are not shown.",
+    )
     reasoning: str
 
 
 # --- SCF database ---------------------------------------------------------------
 
 
-@st.cache_resource(show_spinner="Loading SCF database...")
+@st.cache_resource(show_spinner="Loading SCF database...", max_entries=2)
 def _load_scf_file(path: str, mtime: float) -> list[dict]:
     """Parse the SCF database. Keyed on the file's mtime, so a rebuilt file is re-read."""
     with open(path, "r", encoding="utf-8") as f:
@@ -318,7 +329,8 @@ def _validate_mapping_result(
     allowed to pick (the retrieved candidates).
 
     - Drops IDs that are not in `allowed` (recorded in rejected_control_ids)
-      and duplicate IDs, then keeps at most top_k, in the model's order.
+      and duplicate IDs, then keeps at most top_k, in the model's order
+      (the rest are recorded in capped_control_ids).
     - Replaces domain, description and regulations with the database values,
       so no control text shown to the user is written by the model.
     """
@@ -345,6 +357,7 @@ def _validate_mapping_result(
         valid_mappings.append(m)
 
     if top_k is not None:
+        result.capped_control_ids = [m.control_id for m in valid_mappings[top_k:]]
         valid_mappings = valid_mappings[:top_k]
     result.mappings = valid_mappings
     result.rejected_control_ids = rejected
@@ -496,6 +509,7 @@ def _validate_scope_recommendation(
         recommended_control_ids=valid[:max_controls],
         rejected_control_ids=rejected,
         rejected_domains=rejected_domains,
+        capped_control_ids=valid[max_controls:],
         reasoning=rec.reasoning,
     )
 

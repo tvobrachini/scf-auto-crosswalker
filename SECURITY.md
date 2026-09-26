@@ -24,5 +24,5 @@ Out of scope: vulnerabilities in third-party dependencies that are already track
 - Never commit API keys, `.env` files or real audit data. `.env` and `data/` are git-ignored, and pre-commit runs detect-secrets.
 - Model output is untrusted. Control IDs are checked against the candidates the model was given and control text is taken from the SCF database, but whether a suggested control actually fits the input still needs a person to decide.
 - Model text shown in the UI is Markdown-escaped, so a prompt-injected document cannot make the page render links or load external images. CSV exports prefix cells that would start a spreadsheet formula (`=`, `+`, `-`, `@`) with an apostrophe.
-- PDF uploads are read up to 50 pages, and a batch maps at most 50 distinct findings.
+- Text is extracted from at most the first 50 pages of a PDF (the file is still opened and parsed in full, so this limits extraction, not parsing cost), and a batch maps at most 50 distinct findings.
 - The SCF workbook is downloaded from the latest release of the official `securecontrolsframework` GitHub repository over HTTPS. No checksum is published for it, so the download is trusted on the basis of that source only.

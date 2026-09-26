@@ -121,11 +121,21 @@ def test_map_text_keeps_at_most_top_k(monkeypatch, use_db, fake_embeddings):
     )
     result = mapper.map_text_to_scf("encrypt", top_k=2)
     assert [m.control_id for m in result.mappings] == ["CRY-01", "CRY-03"]
+    assert result.capped_control_ids == ["IAC-06", "GOV-01"]
 
 
 @pytest.mark.parametrize(
     ("given", "expected"),
-    [(0.85, 85), (85, 85), (85.4, 85), (1, 100), (0, 0), (150, 100), (-3, 0)],
+    [
+        (0.85, 85),
+        (85, 85),
+        (85.4, 85),
+        (1, 1),
+        (0, 0),
+        (150, 100),
+        (-3, 0),
+        (float("nan"), 0),
+    ],
 )
 def test_confidence_accepts_fractions_and_is_clamped(
     monkeypatch, use_db, fake_embeddings, given, expected
@@ -189,6 +199,7 @@ def test_scope_analysis_caps_controls(monkeypatch, use_db, fake_embeddings):
     allowed = {c["control_id"]: c for c in mapper.load_scf_database()}
     result = mapper._validate_scope_recommendation(rec, allowed, max_controls=2)
     assert result.recommended_control_ids == ["CRY-01", "CRY-03"]
+    assert result.capped_control_ids == ["IAC-06"]
 
 
 # --- SCF database loading --------------------------------------------------------
