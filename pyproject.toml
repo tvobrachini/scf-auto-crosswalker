@@ -40,6 +40,7 @@ skips = ["B101"] # Skip assert usage only; B105 re-enabled to detect real hardco
 [dependency-groups]
 dev = [
     "bandit>=1.9.4",
+    "compliance-trestle>=5.1",
     "pip-audit>=2.10.1",
     "pre-commit>=4.3.0",
     "pyright>=1.1.0",
