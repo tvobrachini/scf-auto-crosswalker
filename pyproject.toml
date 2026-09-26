@@ -1,7 +1,10 @@
 [project]
 name = "scf-auto-crosswalker"
 version = "0.1.0"
-description = "AI-Driven SCF Crosswalker"
+description = "LLM-suggested mappings from IT policies and cloud findings to Secure Controls Framework (SCF) controls, checked against the SCF database, for human review"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "Tiago Brachini" }]
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
@@ -22,6 +25,10 @@ dependencies = [
     "scikit-learn>=1.4.0",
     "tenacity>=8.2.0",
 ]
+
+[project.urls]
+Repository = "https://github.com/tvobrachini/scf-auto-crosswalker"
+Issues = "https://github.com/tvobrachini/scf-auto-crosswalker/issues"
 
 [tool.bandit]
 exclude_dirs = ["tests", ".venv"]
@@ -46,12 +53,5 @@ python_classes = ["Test*"]
 python_functions = ["test_*"]
 addopts = "-v --tb=short"
 
-[tool.pyright]
-include = ["src"]
-typeCheckingMode = "basic"
-reportAttributeAccessIssue = "none"
-reportArgumentType = "none"
-reportUnknownVariableType = "none"
-reportUnknownMemberType = "none"
-reportUnknownArgumentType = "none"
-venv = ".venv"
+# Pyright settings live in pyrightconfig.json (it takes precedence over a
+# [tool.pyright] table, so keeping both would only drift).

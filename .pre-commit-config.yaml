@@ -1,36 +1,52 @@
+# pre-commit configuration
+#
+# Install once:
+#   uv run pre-commit install
+#
+# Run manually on all files:
+#   uv run pre-commit run --all-files
+
 repos:
--   repo: https://github.com/Yelp/detect-secrets
+  # ── Detect hardcoded secrets ──────────────────────────────────────────────
+  - repo: https://github.com/Yelp/detect-secrets
     rev: v1.5.0
     hooks:
-    -   id: detect-secrets
-        args: ['--baseline', '.secrets.baseline']
-        exclude: .env.example
+      - id: detect-secrets
+        args: ["--baseline", ".secrets.baseline"]
+        exclude: |
+          (?x)^(
+            .env.example|
+            uv.lock
+          )$
 
--   repo: https://github.com/pre-commit/pre-commit-hooks
+  # ── General hygiene ───────────────────────────────────────────────────────
+  - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v4.6.0
     hooks:
-    -   id: trailing-whitespace
-    -   id: end-of-file-fixer
-    -   id: check-yaml
-    -   id: check-added-large-files
-        args: ['--maxkb=500']
-    -   id: check-merge-conflict
+      - id: check-added-large-files # no accidental data or binary commits
+        args: ["--maxkb=500"]
+      - id: check-merge-conflict
+      - id: end-of-file-fixer
+      - id: trailing-whitespace
+      - id: check-yaml
+      - id: check-toml
 
--   repo: https://github.com/astral-sh/ruff-pre-commit
+  # ── Python linting & formatting ───────────────────────────────────────────
+  - repo: https://github.com/astral-sh/ruff-pre-commit
     rev: v0.15.5
     hooks:
-    -   id: ruff
-        args: [ --fix ]
-    -   id: ruff-format
+      - id: ruff
+        args: [--fix]
+      - id: ruff-format
 
--   repo: https://github.com/PyCQA/bandit
-    rev: 1.7.9
+  # ── SAST ──────────────────────────────────────────────────────────────────
+  - repo: https://github.com/PyCQA/bandit
+    rev: 1.9.4
     hooks:
-    -   id: bandit
+      - id: bandit
         args: ["-c", "pyproject.toml"]
         additional_dependencies: ["bandit[toml]"]
 
--   repo: https://github.com/pypa/pip-audit
-    rev: v2.7.3
-    hooks:
-    -   id: pip-audit
+# Dependency CVEs are checked by `uv run pip-audit` in CI, which audits the
+# project's environment. A pip-audit pre-commit hook would only audit the
+# hook's own isolated environment.

@@ -1,0 +1,21 @@
+version: 2
+updates:
+  - package-ecosystem: "uv" # Python dependencies (uv.lock)
+    directory: "/"
+    schedule:
+      interval: "weekly"
+
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+
+  - package-ecosystem: "docker"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    ignore:
+      # pandas is locked at 2.2.0, which has no Python 3.13 wheels. Move the
+      # base image past 3.12 together with a pandas upgrade.
+      - dependency-name: "python"
+        versions: [">=3.13"]
