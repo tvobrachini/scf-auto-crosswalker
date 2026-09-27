@@ -12,7 +12,7 @@ With ``DEMO_MODE=1`` (also true/yes/on), `mapper` swaps exactly three things:
 - ``_get_embedding_model()`` returns ``DemoEmbeddingModel``, a hashed
   bag-of-words encoder (no Hugging Face download).
 - ``_get_llm()`` returns ``CannedChatModel``, which answers through the same
-  ``with_structured_output(schema)`` interface as ChatGroq. It picks the
+  ``with_structured_output(schema)`` interface as ChatOpenAI. It picks the
   top-ranked retrieved candidates with fixed confidences and template
   justifications that say they are demo output. It also returns one ID that is
   not among the candidates (``AC-2``, a NIST SP 800-53 ID), on purpose, so the
@@ -356,7 +356,7 @@ def _candidates(system_text: str) -> list[tuple[str, str]]:
 
 class CannedChatModel:
     """
-    Stands in for ChatGroq. `with_structured_output(schema)` returns a runnable
+    Stands in for ChatOpenAI. `with_structured_output(schema)` returns a runnable
     that reads the candidate list out of the rendered prompt and fills the
     schema deterministically. It never makes a network call.
     """

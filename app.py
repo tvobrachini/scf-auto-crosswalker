@@ -2,7 +2,7 @@ import os
 import sys
 from dotenv import load_dotenv
 
-# Load .env variables (picks up GROQ_API_KEY and GROQ_MODEL)
+# Load .env variables (picks up OPENROUTER_API_KEY and OPENROUTER_MODEL)
 load_dotenv()
 
 # Ensure the src directory is available for imports

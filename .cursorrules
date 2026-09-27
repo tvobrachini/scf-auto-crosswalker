@@ -8,7 +8,7 @@ You are an expert IT Auditor, Cloud Security Engineer, and Python Architect. You
 - **Data Validation:** Pydantic v2.
 - **Data Manipulation:** Pandas.
 - **UI:** Streamlit.
-- **LLM Engine:** Groq, `llama-3.1-8b-instant` by default (override with `GROQ_MODEL`).
+- **LLM Engine:** OpenRouter, `meta-llama/llama-3.1-8b-instruct` by default (override with `OPENROUTER_MODEL`).
 - **Type Checking:** Pyright (basic mode, targeting `src/` only).
 
 ## 2. Domain Knowledge
@@ -25,7 +25,7 @@ You are an expert IT Auditor, Cloud Security Engineer, and Python Architect. You
 - **Linting & Formatting:** Always write code that passes `ruff check` and `ruff format`.
 - **Security:** Code must pass `bandit` SAST scans. No `eval()`, `exec()`, hardcoded secrets, or SSL bypass.
 - **Dependencies:** No new secrets in committed code. Run `detect-secrets scan` and update `.secrets.baseline` if new benign patterns appear.
-- **Testing:** Tests reside in `tests/` and run offline: fake the LLM (`_get_llm`) and the embedding model (`_get_embedding_model`), never call Groq or Hugging Face. CI enforces 85% coverage of `src/`.
+- **Testing:** Tests reside in `tests/` and run offline: fake the LLM (`_get_llm`) and the embedding model (`_get_embedding_model`), never call OpenRouter or Hugging Face. CI enforces 85% coverage of `src/`.
 
 ## 4. UI/UX Rules
 - Keep the Streamlit UI modular. Core logic belongs in `src/`. Interface controls belong in `app.py` or `src/ui/`.

@@ -39,7 +39,7 @@ LAB = os.path.join(ROOT, "lab_data")
 def demo_on(monkeypatch):
     monkeypatch.setenv("DEMO_MODE", "1")
     monkeypatch.delenv("ENVIRONMENT", raising=False)
-    monkeypatch.delenv("GROQ_API_KEY", raising=False)
+    monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
 
 
 @pytest.fixture
@@ -64,7 +64,7 @@ def test_demo_mode_falsy_values(monkeypatch, value):
 
 
 def test_demo_mode_is_off_by_default(demo_off, monkeypatch, tmp_path):
-    monkeypatch.setenv("GROQ_API_KEY", "test-key")
+    monkeypatch.setenv("OPENROUTER_API_KEY", "test-key")
     monkeypatch.setattr(mapper, "PARSED_JSON_FILE", str(tmp_path / "missing.json"))
     assert not demo_mode_enabled()
     # The real implementations are used.
@@ -130,7 +130,7 @@ def test_demo_pipeline_is_deterministic_and_offline(demo_on, monkeypatch):
         raise AssertionError("demo mode must not load real models")
 
     monkeypatch.setattr(mapper, "SentenceTransformer", no_network)
-    monkeypatch.setattr(mapper, "ChatGroq", no_network)
+    monkeypatch.setattr(mapper, "ChatOpenAI", no_network)
 
     text = "CloudFront distributions should require encryption in transit (HTTPS)."
     first = mapper.map_text_to_scf(text)

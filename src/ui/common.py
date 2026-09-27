@@ -39,16 +39,16 @@ class Labels:
     catalog_short: str  # "SCF" / "demo catalog"
     example_id: str  # "CRY-01" / "DCRY-01"
     demo_suffix: str  # "" / " (demo catalog)"
-    groq_notice: str
+    llm_notice: str
 
 
 def build_labels(demo_mode: bool) -> Labels:
-    """Derive the catalog wording and Groq notice from whether demo mode is on."""
-    groq_notice = (
-        "DEMO MODE: nothing is sent to Groq; a canned stand-in picks from the retrieved "
+    """Derive the catalog wording and LLM notice from whether demo mode is on."""
+    llm_notice = (
+        "DEMO MODE: nothing is sent to OpenRouter; a canned stand-in picks from the retrieved "
         "candidates of the synthetic catalog."
         if demo_mode
-        else "Text you submit is sent to Groq's API for the LLM step. "
+        else "Text you submit is sent to OpenRouter's API for the LLM step. "
         "Do not submit confidential audit data unless your organization allows it."
     )
     return Labels(
@@ -59,7 +59,7 @@ def build_labels(demo_mode: bool) -> Labels:
         catalog_short="demo catalog" if demo_mode else "SCF",
         example_id="DCRY-01" if demo_mode else "CRY-01",
         demo_suffix=" (demo catalog)" if demo_mode else "",
-        groq_notice=groq_notice,
+        llm_notice=llm_notice,
     )
 
 

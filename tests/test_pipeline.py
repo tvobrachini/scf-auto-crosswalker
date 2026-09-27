@@ -1,6 +1,6 @@
 """End-to-end mapper flow with a fake LLM and a fake embedding model."""
 
-import groq
+import openai
 import httpx
 import numpy as np
 import pytest
@@ -10,7 +10,7 @@ import mapper as mapper
 
 
 class FakeLLM:
-    """Stands in for ChatGroq: records the prompt and returns a canned object."""
+    """Stands in for ChatOpenAI: records the prompt and returns a canned object."""
 
     def __init__(self, payload: dict):
         self.payload = payload
@@ -153,7 +153,7 @@ def test_confidence_accepts_fractions_and_is_clamped(
 
 
 def test_llm_client_has_no_retries_of_its_own(monkeypatch):
-    monkeypatch.setenv("GROQ_API_KEY", "test-key")
+    monkeypatch.setenv("OPENROUTER_API_KEY", "test-key")
     assert mapper._get_llm().max_retries == 0
 
 
@@ -326,8 +326,8 @@ def test_embeddings_are_memoized_in_process(monkeypatch, scf_sample, fake_embedd
 # --- retries -------------------------------------------------------------------
 
 
-def _groq_error(cls, status):
-    request = httpx.Request("POST", "https://api.groq.com/openai/v1/chat/completions")
+def _openai_error(cls, status):
+    request = httpx.Request("POST", "https://api.openai.com/openai/v1/chat/completions")
     response = httpx.Response(status, request=request)
     return cls("boom", response=response, body=None)
 
@@ -343,15 +343,15 @@ class _Chain:
 
 
 def test_invoke_chain_does_not_retry_auth_errors():
-    chain = _Chain(_groq_error(groq.AuthenticationError, 401))
-    with pytest.raises(groq.AuthenticationError):
+    chain = _Chain(_openai_error(openai.AuthenticationError, 401))
+    with pytest.raises(openai.AuthenticationError):
         mapper._invoke_chain(chain, {})
     assert chain.calls == 1
 
 
 def test_invoke_chain_retries_rate_limits(monkeypatch):
     monkeypatch.setattr(mapper._invoke_chain.retry, "sleep", lambda _: None)
-    chain = _Chain(_groq_error(groq.RateLimitError, 429))
-    with pytest.raises(groq.RateLimitError):
+    chain = _Chain(_openai_error(openai.RateLimitError, 429))
+    with pytest.raises(openai.RateLimitError):
         mapper._invoke_chain(chain, {})
     assert chain.calls == 3

@@ -19,7 +19,7 @@ The state of `main` at commit `9531561`.
 
 ### Added
 - Three tools: SCF Auto-Crosswalker (policy text, documents and Security Hub findings), Compliance Gap Analyzer, Audit Scope Analyzer.
-- Retrieval with `all-MiniLM-L6-v2`, one structured Groq call, and validation that only accepts retrieved SCF IDs, with control content copied from the SCF database.
+- Retrieval with `all-MiniLM-L6-v2`, one structured OpenRouter call, and validation that only accepts retrieved SCF IDs, with control content copied from the SCF database.
 - CSV exports and OSCAL 1.2 `mapping-collection` export (`draft`, `intersects-with`), validated with compliance-trestle in the tests.
 - `DEMO_MODE` with a synthetic catalog and a canned model, for running all three tools without keys or downloads.
 - Evaluation harness against AWS's and SCF's published NIST SP 800-53 mappings, with random and TF-IDF baselines. First results (retrieval only): 62.0% hit rate at k = 50 on 221 Security Hub controls.
