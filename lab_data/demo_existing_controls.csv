@@ -1,0 +1,11 @@
+Control ID,Control Name,Status
+DGOV-01,Information Security Policy,Implemented
+DGOV-02,Security Awareness Training,Implemented
+DCRY-01,Encryption at Rest,Implemented
+DCRY-02,Encryption in Transit,Implemented
+DIAM-01,User Account Lifecycle,Implemented
+DIAM-02,Multi-Factor Authentication,Partially implemented
+DLOG-01,Central Security Logging,Implemented
+DNET-01,Firewall Rules,Implemented
+DBCR-01,Backups,Planned
+SEC-99,Legacy Security Charter,Implemented

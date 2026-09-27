@@ -14,6 +14,12 @@ from langchain_core.prompts import ChatPromptTemplate
 from pydantic import BaseModel, Field, field_validator
 from sentence_transformers import SentenceTransformer
 from sklearn.metrics.pairwise import cosine_similarity
+from demo import (
+    DEMO_CATALOG,
+    CannedChatModel,
+    DemoEmbeddingModel,
+    demo_mode_enabled,
+)
 from tenacity import (
     retry,
     retry_if_exception_type,
@@ -173,7 +179,11 @@ def load_scf_database() -> list[dict]:
     The result is shared across Streamlit sessions and must not be mutated.
     A missing or broken file is not cached, so the next call sees a download
     made in the meantime, from the sidebar or from `python src/fetch_scf.py`.
+
+    In DEMO_MODE it is the synthetic demo catalog instead (see src/demo.py).
     """
+    if demo_mode_enabled():
+        return DEMO_CATALOG
     try:
         mtime = os.path.getmtime(PARSED_JSON_FILE)
     except OSError:
@@ -200,9 +210,16 @@ def scf_domains(scf_data: list[dict]) -> list[str]:
 
 
 @st.cache_resource(show_spinner="Loading the embedding model...")
-def _get_embedding_model() -> SentenceTransformer:
+def _load_sentence_transformer() -> SentenceTransformer:
     """Load the sentence-transformers model. Cached so it is only downloaded once."""
     return SentenceTransformer(_EMBEDDING_MODEL_NAME)
+
+
+def _get_embedding_model() -> SentenceTransformer | DemoEmbeddingModel:
+    """The embedding model; in DEMO_MODE, a local hashed bag-of-words encoder."""
+    if demo_mode_enabled():
+        return DemoEmbeddingModel()
+    return _load_sentence_transformer()
 
 
 def _control_texts(scf_data: list[dict]) -> list[str]:
@@ -247,6 +264,10 @@ def _build_or_load_embeddings(scf_data: list[dict]) -> np.ndarray:
     cache that cannot be read (for example, truncated by a crash) is rebuilt.
     """
     texts = _control_texts(scf_data)
+    if demo_mode_enabled():
+        # The demo catalog is tiny and the demo encoder instant: embed it
+        # directly and leave the on-disk cache of the real SCF alone.
+        return _get_embedding_model().encode(texts, convert_to_numpy=True)
     fingerprint = _fingerprint(texts)
 
     if fingerprint in _embeddings_memo:
@@ -400,7 +421,11 @@ def _invoke_chain(chain, inputs: dict):
     return chain.invoke(inputs)
 
 
-def _get_llm() -> ChatGroq:
+def _get_llm() -> ChatGroq | CannedChatModel:
+    # In DEMO_MODE, a canned stand-in with the same structured-output
+    # interface; nothing is sent to Groq (see src/demo.py).
+    if demo_mode_enabled():
+        return CannedChatModel()
     # The Groq client's own retries are turned off so that _invoke_chain is
     # the only retry layer: at most MAX_ATTEMPTS calls per input.
     return ChatGroq(
