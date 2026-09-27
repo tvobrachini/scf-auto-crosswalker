@@ -83,7 +83,7 @@ Audit Scope Analyzer on the lab scope: suggested domains and controls to test, t
 
 ![Gap Analyzer on the real SCF 2026.3 release: 407 controls mapped to SOC 2, 2 listed, 405 not listed, and six IDs that are not SCF IDs](docs/screenshots/gap-analyzer-real-scf-2026-3.png)
 
-407 SCF controls map to SOC 2; 2 are listed in the sample, and 6 of its IDs are flagged as not SCF IDs. Captured with `MODE=real node scripts/capture_screenshots.mjs`. SCF content © Secure Controls Framework (securecontrolsframework.com), CC BY-ND 4.0; shown verbatim with attribution. The SCF data itself is not stored in this repository.
+407 SCF controls map to SOC 2; 2 are listed in the sample, and 6 of its IDs (such as `IAM-01`) are flagged as not SCF IDs, because the sample uses its own numbering, as many control lists do (see [`lab_data/README.md`](lab_data/README.md)). Captured with `MODE=real node scripts/capture_screenshots.mjs`. SCF content © Secure Controls Framework (securecontrolsframework.com), CC BY-ND 4.0; unmodified SCF text, truncated to the table width, shown with attribution. The SCF data itself is not stored in this repository.
 
 [`lab_data/sample_outputs/`](lab_data/sample_outputs) holds raw outputs from earlier runs with the real SCF and a Groq model, and [`lab_data/README.md`](lab_data/README.md) annotates them. They record the failure modes the current validation was built for: a scope analysis that returned only NIST 800-53 IDs, and control descriptions rewritten by the model.
 
@@ -249,7 +249,7 @@ uv run python scripts/run_eval.py --gold eval/gold.csv --llm                # pl
 
 It reports retrieval hit rate, mean recall and MRR at k = 1 to 50 (50 is what the model sees), next to a random-ranking expectation and a TF-IDF baseline, and, with `--llm`, the precision of the model's suggestions.
 
-**First results (retrieval only, 2026-09-27).** SCF 2026.3, 221 Security Hub controls from the AWS user guide as of March 2023, `all-MiniLM-L6-v2` run from a hash-verified ONNX export:
+**First results (retrieval only, 2026-09-27).** SCF 2026.3, 221 Security Hub controls from the AWS user guide as of March 2023, `all-MiniLM-L6-v2` run from an ONNX export checked against a pinned hash:
 
 | k | Embedding hit rate | TF-IDF hit rate | Random (expected) |
 |---:|---:|---:|---:|
@@ -289,7 +289,7 @@ DECISIONS.md                    Architecture decision records
 
 ---
 
-## Limitations and accuracy
+## Limitations and measurement
 
 - **Retrieval results only; the model step is unmeasured.** Retrieval has been scored on SCF 2026.3 (see [Evaluation](#evaluation)): at k = 50, 62% of the 221 Security Hub controls in the gold set have at least one SCF control linked by the published mappings among the candidates, so 38% do not. The model step has not been scored against a Groq model, so no precision figure is claimed. The retrieval run used an ONNX export of the embedding model, verified by hash and against a second export but not against the PyTorch model the app loads, and the AWS user guide as of March 2023. The earlier sample outputs include weak matches and, for the Scope Analyzer, NIST IDs instead of SCF IDs, which validation now rejects.
 - **Validation proves existence, not fit.** An ID that passes validation is a real SCF control that was among the candidates. Whether it is the right control is the reviewer's call.

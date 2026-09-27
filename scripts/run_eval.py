@@ -64,20 +64,28 @@ EVAL_DIR = os.path.join(ROOT, "eval")
 DEFAULT_KS = (1, 3, 5, 10, 20, CROSSWALK_CANDIDATES)
 
 
-def use_onnx_model(model_dir: str) -> str:
+def use_onnx_model(model_dir: str, allow_unverified: bool = False) -> str:
     """
     Swap the embedding model for the ONNX export in model_dir and keep its
     embeddings in their own cache file. Returns a label for the report.
-    """
-    from onnx_encoder import load_onnx_encoder, sha256_file
 
+    Refuses a model.onnx whose hash differs from the one the published results
+    used, unless allow_unverified is set.
+    """
+    from onnx_encoder import MODEL_ONNX_SHA256, load_onnx_encoder, sha256_file
+
+    digest = sha256_file(os.path.join(model_dir, "model.onnx"))
+    if digest != MODEL_ONNX_SHA256 and not allow_unverified:
+        raise SystemExit(
+            f"model.onnx sha256 {digest} is not the pinned {MODEL_ONNX_SHA256}; "
+            "pass --allow-unverified-onnx to score it anyway."
+        )
     encoder = load_onnx_encoder(model_dir)
     mapper._get_embedding_model = lambda: encoder
     mapper.EMBEDDINGS_CACHE_FILE = os.path.join(
         mapper.DATA_DIR, "scf_embeddings_onnx.npz"
     )
     mapper._embeddings_memo.clear()
-    digest = sha256_file(os.path.join(model_dir, "model.onnx"))
     return f"all-MiniLM-L6-v2, ONNX export (model.onnx sha256 {digest})"
 
 
@@ -91,6 +99,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--limit", type=int, help="score only the first N cases")
     parser.add_argument(
         "--onnx-model", help="directory with model.onnx and tokenizer.json"
+    )
+    parser.add_argument(
+        "--allow-unverified-onnx",
+        action="store_true",
+        help="score a model.onnx whose hash is not the pinned one",
     )
     args = parser.parse_args(argv)
 
@@ -135,7 +148,7 @@ def main(argv: list[str] | None = None) -> int:
 
     embedder = "all-MiniLM-L6-v2 (sentence-transformers)"
     if args.onnx_model:
-        embedder = use_onnx_model(args.onnx_model)
+        embedder = use_onnx_model(args.onnx_model, args.allow_unverified_onnx)
 
     ks = DEFAULT_KS
     k_max = max(ks)
