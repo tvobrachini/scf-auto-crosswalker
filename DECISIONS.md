@@ -94,7 +94,7 @@ This file records the design decisions as the code implements them today. Each r
 
 **Consequences.**
 - There is no LLM in the loop, so the same input always gives the same result.
-- The uploaded list must use SCF IDs. A list with its own numbering matches nothing, which is why unknown IDs are surfaced rather than silently counted as gaps.
+- The column compared must hold SCF IDs. A list with its own numbering matches nothing on its ID column, which is why unknown IDs are surfaced rather than silently counted as gaps; ADR-011 adds mapping columns for such lists.
 - *Listed* means only that the ID is present. The tool does not compare control names or check design or operating effectiveness, and the UI says this next to the metrics.
 
 ---
@@ -145,7 +145,7 @@ This file records the design decisions as the code implements them today. Each r
 - The two mappings spell 800-53 IDs differently (SCF 2026.3 zero-pads: `AC-02(01)`; AWS: `AC-2(1)`). The join normalizes both; without it, the first run kept 107 of 221 cases and 334 of 1,866 gold links, and nothing flagged the loss. `tests/test_evaluation.py` pins the normalization.
 - A hit rate is only meaningful next to what chance would score, because gold sets are large (median 7, up to 28 controls). The report therefore includes the exact random-ranking expectation, a TF-IDF baseline over the same control texts, MRR, and the subset of cases with at most 10 gold controls.
 - Where an AWS account or Hugging Face is out of reach, the inputs can come from the archived public AWS user guide sources (`scripts/import_awsdocs_controls.py`, which records the commit) and the embedding model from its ONNX export (`src/onnx_encoder.py`, `--onnx-model`). Both substitutions are documented with the results. onnxruntime is not a project dependency: it is used only for this path, through `uv run --with onnxruntime`, so the app's lockfile and image stay unchanged.
-- First results (2026-09-27, retrieval only, in `eval/README.md`): at k = 50, 62.0% hit rate against 46.2% for TF-IDF and 22.8% for random ranking; 38% of cases have no linked control among the model's candidates. The model step is not yet scored, because no Groq key was available for that run.
+- First results (2026-09-27, retrieval only, in `eval/README.md`): at k = 50, 62.0% hit rate against 46.2% for TF-IDF and 22.8% for random ranking; 38% of cases have no linked control among the model's candidates. The model step is not yet scored; that needs a Groq key (`--llm`).
 
 ---
 
@@ -168,3 +168,21 @@ Everything else is the production code on demo data: the prompts, candidate retr
 - Demo output says nothing about the accuracy of the real pipeline. The catalog is not the SCF, the embedder only matches shared words, and the canned model makes no judgment; its picks are whatever the toy retrieval ranks first, which is sometimes a weak match. The evaluation (ADR-009) is the place for accuracy.
 - The embedding cache, the Groq retry behaviour and the SCF download are not exercised in demo mode; the offline tests (ADR-007) cover them.
 - `tests/test_demo.py` runs all three tools in `AppTest` with demo mode on and checks the badge, the rejected ID and the export stamps, so the seam cannot drift silently.
+
+---
+
+## ADR-011: Report gap coverage per framework requirement
+
+**Status:** Accepted (extends ADR-006)
+
+**Context.** The first Gap Analyzer counted SCF controls. On SCF 2026.3, 407 SCF controls map to SOC 2, so a list that names two of them showed "405 not listed". A SOC 2 assessment is organised by Trust Services Criteria, of which SCF cites 69, and a reviewer reading "405 gaps" would overstate the work by several times. Real control inventories also rarely use SCF IDs as their own numbering; when they are mapped to the SCF, the mapping sits in a separate column, often with several SCF IDs per control.
+
+**Decision.**
+- `requirement_coverage` (`src/gap_analysis.py`) inverts the crosswalk column: for each framework reference SCF cites, it lists the SCF controls mapped to it and which of them are listed. The report leads with "requirements with a listed control" and keeps the SCF-control view as a second tab.
+- References are rolled up only where the framework's own structure makes the level unambiguous: SOC 2 points of focus (`CC1.1-POF1`) to their criterion, ISO 27001 lettered list items (`6.1.1(e)(1)`) to their clause. Other frameworks keep SCF's references as written (PCI DSS `12.1.1`, NIST CSF `GV.SC-01`, HIPAA `164.308(a)(5)`), since rolling those up would merge requirements that are assessed separately.
+- The ID column is detected by which column names the most SCF IDs, falling back to the header rules, and a cell may hold several IDs separated by `;`, `,`, `|` or new lines. A list with its own numbering and an SCF mapping column therefore works without reformatting.
+
+**Consequences.**
+- On SCF 2026.3 with `lab_data/sample_controls_with_scf_mapping.csv` (in-place rows only), 8 of 69 SOC 2 criteria have a listed control, which is the number an assessor would start from.
+- A requirement with a listed control is not a requirement met. SCF's mappings vary in strength (its STRM relationships are not in the crosswalk columns), and one control rarely satisfies a whole criterion. The UI says so under the metrics; a requirement with none is still a clear gap.
+- The requirement list is what SCF cites, not the framework's full list. A requirement SCF maps nothing to does not appear, and the count can include references at more than one level (NIST CSF cites functions, categories and subcategories).

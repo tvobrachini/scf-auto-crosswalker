@@ -21,12 +21,13 @@ The tool narrows the SCF to a shortlist, lets a model choose from that shortlist
 3. **Check.** Any ID that was not in the shortlist is dropped and shown to the user as rejected. The control's domain, text and framework references are then copied from the SCF database, so every word of control text on screen is SCF's own.
 4. **Record.** Results export to CSV and to an OSCAL mapping-collection with status `draft`, so they can enter a GRC toolchain as unreviewed suggestions.
 
-A third tool, the Gap Analyzer, uses no model at all. It lists the SCF controls that SCF maps to a framework and checks which of them appear in an existing control list, optionally only those with an in-place status.
+A third tool, the Gap Analyzer, uses no model at all. It takes an existing control list, either numbered with SCF IDs or with a column mapping each control to them, and reports, per framework requirement, whether any SCF control mapped to it is on the list, optionally counting only controls with an in-place status.
 
 ## Decisions that came from the audit side
 
 - **The model is not a source of truth.** It proposes IDs; the framework supplies the content. This came from an early sample run in which the Scope Analyzer returned only NIST SP 800-53 IDs (`AC-1`, `SC-8`, …) for an SCF test plan, and the Crosswalker displayed control descriptions the model had rewritten. Both now fail validation visibly instead of reaching the page.
 - **Claims are scoped to what the tool can know.** A control in the gap report is *listed*, not *covered*: the tool sees an ID in a spreadsheet, not a control operating. Confidence is labeled as the model's own, uncalibrated number. The OSCAL export records every map as `intersects-with`, the weakest positive relationship in NIST IR 8477, because the tool does not establish subset, superset or equality.
+- **Gaps are counted the way an assessor counts them.** The first version counted SCF controls: 405 of the 407 mapped to SOC 2 were "not listed" for the sample list. An assessor works from the 69 criteria SCF cites, so the report now leads with those (8 have a listed control for the mapped sample) and treats a criterion with a listed control as a place to start testing, not as met.
 - **Framework data is handled under its license.** The SCF is licensed CC BY-ND 4.0, which does not allow redistributing modified copies, so the repository does not host SCF data. The app downloads the official release and derives its working copy locally.
 - **Data leaving the machine is disclosed.** Submitted text goes to Groq's API; the UI says so next to the submit button, and Security Hub findings are reduced to their descriptive fields before anything is sent.
 
@@ -36,7 +37,7 @@ A mapping tool needs a number, and hand-labeled gold sets are expensive. `script
 
 The first run scored retrieval only, on SCF 2026.3 and the 221 Security Hub controls in the AWS user guide (as of March 2023) that cite NIST SP 800-53. Two things came out of it before any number did. First, the join was silently broken: SCF writes `AC-02(01)` where AWS writes `AC-2(1)`, so about half the cases and 82% of the gold links were missing until both sides were normalized. Second, a hit rate alone means little when a case can have 28 gold controls, so the report puts it next to the exact expectation for random ranking and a TF-IDF baseline.
 
-The result is modest. At k = 50, the shortlist the model sees, 62% of cases include a control the published mappings link to the finding (TF-IDF 46%, random 23%), and the top-ranked control is linked in 11% of cases. For the other 38%, the model cannot agree with the published mappings whatever it does, which makes retrieval, not the model, the first thing to improve. The embedding model ran from an ONNX export verified by hash, because Hugging Face was out of reach, and the model step is still unscored. [`eval/README.md`](eval/README.md) has the full tables, provenance and caveats.
+The result is modest. At k = 50, the shortlist the model sees, 62% of cases include a control the published mappings link to the Security Hub control (TF-IDF 46%, random 23%), and the top-ranked control is linked in 11% of cases. For the other 38%, the model cannot agree with the published mappings whatever it does, which makes retrieval, not the model, the first thing to improve. The embedding model ran from an ONNX export verified by hash, because Hugging Face was out of reach, and the model step is still unscored. [`eval/README.md`](eval/README.md) has the full tables, provenance and caveats.
 
 ## Limitations
 
