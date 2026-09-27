@@ -44,7 +44,7 @@ def demo_on(monkeypatch):
 
 @pytest.fixture
 def demo_off(monkeypatch):
-    monkeypatch.delenv("DEMO_MODE", raising=False)
+    monkeypatch.setenv("DEMO_MODE", "")  # empty, so load_dotenv() cannot restore it
 
 
 # --- Activation ---------------------------------------------------------------------
@@ -304,7 +304,7 @@ def test_app_gap_analyzer_in_demo(demo_on):
     at.button(key="gap_btn").click().run()
     assert not at.exception
     metrics = {m.label: m.value for m in at.metric}
-    assert int(metrics["SCF controls mapped"]) > 0
+    assert int(metrics["demo catalog controls mapped"]) > 0
     assert any("SEC\\-99" in w.value for w in at.warning)
 
 

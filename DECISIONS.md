@@ -12,7 +12,7 @@ This file records the design decisions as the code implements them today. Each r
 
 **Consequences.**
 - One mapping target instead of eight. A finding mapped to an SCF control inherits SCF's published references.
-- Those references are only as good as SCF's crosswalk. The UI labels them "from SCF's crosswalk".
+- Those references are only as good as SCF's crosswalk. The UI labels them "from the SCF crosswalk".
 - `parse_scf` keeps only the columns whose names contain one of the eight framework keywords (compared with spaces and line breaks removed, so "NIST SP 800-53 R5" and "NIST\n800-53\nrev5" both match), so any other framework in the workbook is dropped.
 
 ---
@@ -158,7 +158,7 @@ This file records the design decisions as the code implements them today. Each r
 - `_get_embedding_model()` returns a hashed bag-of-words encoder (CRC32 buckets of crudely stemmed words). The demo catalog is embedded directly, so the on-disk embedding cache of the real SCF is never touched.
 - `_get_llm()` returns a canned model with ChatGroq's `with_structured_output(schema)` interface, built on a LangChain `RunnableLambda`. It reads the candidate list from the rendered prompt and returns the top three candidates, in retrieval order, with fixed confidences (82, 64, 47) and justifications that say they are demo output. For a scope, it returns the top six and their domains. It also returns `AC-2`, a NIST SP 800-53 ID, on every call, deliberately, so the demo shows validation rejecting an ID that was not among the candidates.
 
-Everything else is the production code on demo data: the prompts, candidate retrieval and ranking, validation, enrichment, batch deduplication and Priority Score ranking, the gap analysis, and the exports. Demo mode never activates silently: every page and the sidebar carry a "DEMO MODE — synthetic catalog, canned model" badge, the sidebar hides the SCF download button, labels name the synthetic catalog, and exports are stamped (a "Demo Notice" column on every CSV row; `[DEMO DATA]` in the OSCAL title, and a notice in the metadata remarks, the mapping description and the target resource). It is off by default and refused when `ENVIRONMENT` is `production` or `staging`.
+Everything else is the production code on demo data: the prompts, candidate retrieval and ranking, validation, enrichment, batch deduplication and Priority Score ranking, the gap analysis, and the exports. Demo mode never activates silently: every page and the sidebar carry a "DEMO MODE — synthetic catalog, canned model" badge, the sidebar hides the SCF download button, labels name the synthetic catalog, and exports are stamped (a "Demo Notice" column on every CSV row; `[DEMO DATA]` in the OSCAL title, and a notice in the metadata remarks, the mapping description and the target resource). It is off by default and refused when `ENVIRONMENT` is `production` or `staging`. `scripts/run_eval.py` and `scripts/generate_mock_output.py` refuse to run in demo mode, so demo output can never be recorded as an evaluation result or a sample of real output.
 
 **Consequences.**
 - Anyone can run all three tools in two minutes with no keys, and the screenshots in the README come from a reproducible demo run (`scripts/capture_screenshots.mjs`).

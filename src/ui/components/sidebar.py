@@ -25,7 +25,11 @@ def render_sidebar() -> str:
     with st.sidebar:
         if demo:
             render_demo_badge(detail=False)
-        st.title("🛡️ Secure Controls Framework (SCF)")
+        st.title(
+            "🛡️ SCF Auto-Crosswalker (demo)"
+            if demo
+            else "🛡️ Secure Controls Framework (SCF)"
+        )
         st.markdown("### GRC Assistant Platform")
 
         app_mode = st.radio("Select Tool", TOOLS)

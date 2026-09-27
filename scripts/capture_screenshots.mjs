@@ -87,16 +87,16 @@ async function main() {
   // 1. Crosswalker, single input: suggestions and the rejected-ID warning.
   await openTool(page, "🔍 SCF Auto-Crosswalker");
   await pick(page, "Select Sample", "sample_endpoint_policy.txt");
-  await page.getByRole("button", { name: /Suggest SCF Controls/ }).click();
+  await page.getByRole("button", { name: /Suggest .*Controls/ }).click();
   await page.getByText("Suggestions ready").first().waitFor();
   await idle(page);
-  await scrollTo(page, page.getByText(/not among the SCF candidates/), -120);
+  await scrollTo(page, page.getByText(/not among the .* candidates/), -120);
   await shot(page, "crosswalker-single-suggestions-and-rejected-id");
 
   // 2. Crosswalker, batch: the Security Hub lab export, ranked, with exports.
   await openTool(page, "🔍 SCF Auto-Crosswalker");
   await pick(page, "Select Sample", "aws_securityhub_finding.json");
-  await page.getByRole("button", { name: /Suggest SCF Controls/ }).click();
+  await page.getByRole("button", { name: /Suggest .*Controls/ }).click();
   await page.getByText("Batch mapping complete").first().waitFor();
   await idle(page);
   // Collapse the suggestion cards so the ranking and the exports fit.
@@ -104,14 +104,14 @@ async function main() {
     await page.locator("summary").filter({ hasText: `#${n} |` }).click();
   }
   await page.waitForTimeout(400);
-  await scrollTo(page, page.getByText(/not among the SCF candidates/), -120);
+  await scrollTo(page, page.getByText(/not among the .* candidates/), -120);
   await shot(page, "crosswalker-batch-ranked-summary-and-exports");
 
   // 3. Gap Analyzer on the demo lab CSV.
   await openTool(page, "📉 Compliance Gap Analyzer");
   await pick(page, "Or select Lab Data", "demo_existing_controls.csv");
   await page.getByRole("button", { name: /Run Gap Analysis/ }).click();
-  await page.getByText("SCF controls mapped").first().waitFor();
+  await page.getByText(/controls mapped/).first().waitFor();
   await idle(page);
   await scrollTo(page, page.getByText(/Current Controls Snapshot/), -60);
   await shot(page, "gap-analyzer-metrics");
@@ -122,7 +122,7 @@ async function main() {
   await page.getByRole("button", { name: /Suggest Controls to Test/ }).click();
   await page.getByText("Suggested Controls to Test").first().waitFor();
   await idle(page);
-  await scrollTo(page, page.getByText(/not among the SCF candidates/), -120);
+  await scrollTo(page, page.getByText(/not among the .* candidates/), -120);
   await shot(page, "scope-analyzer-result");
 
   await ctx.close();

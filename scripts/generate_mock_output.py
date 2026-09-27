@@ -14,6 +14,7 @@ import pandas as pd
 
 # Ensure src is in path since script is in scripts/
 sys.path.append(os.path.join(os.path.dirname(os.path.dirname(__file__)), "src"))
+from demo import demo_mode_enabled  # noqa: E402
 from findings import finding_to_text  # noqa: E402
 from mapper import analyze_audit_scope, map_text_to_scf  # noqa: E402
 
@@ -82,6 +83,10 @@ def run_scope_analysis():
 
 
 if __name__ == "__main__":
+    if demo_mode_enabled():
+        # Sample outputs document real runs; demo output must not land there.
+        print("[-] DEMO_MODE is on; sample outputs need the real SCF data and Groq.")
+        sys.exit(1)
     os.makedirs(OUT_DIR, exist_ok=True)
     if not os.environ.get("GROQ_API_KEY"):
         print("[-] GROQ_API_KEY is not set. The LLM calls would fail.")
