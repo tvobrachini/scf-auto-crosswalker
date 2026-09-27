@@ -41,6 +41,11 @@ uv run --with onnxruntime python scripts/run_eval.py \
 
 # 3. Score the model step too: one Groq call per case.
 uv run python scripts/run_eval.py --gold eval/gold.csv --llm
+
+# 3b. Or on an OpenRouter model instead of Groq (needs OPENROUTER_API_KEY;
+#     langchain-openai is not a project dependency, only used for this).
+uv run --with langchain-openai python scripts/run_eval.py \
+    --gold eval/gold.csv --llm --openrouter-model <model id>
 ```
 
 The report is written to `eval/results.md` and the per-case ranks to `eval/per_case_retrieval.csv`. Both hold only IDs and numbers. `eval/gold.csv` and the control files hold AWS documentation text (CC BY-SA 4.0) and are not committed.
