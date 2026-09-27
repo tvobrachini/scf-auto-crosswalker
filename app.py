@@ -15,6 +15,10 @@ import re  # noqa: E402
 import pandas as pd  # noqa: E402
 import pdfplumber  # noqa: E402
 import streamlit as st  # noqa: E402
+from demo import (  # noqa: E402
+    DemoModeNotAllowedError,
+    demo_mode_enabled,
+)
 from crosswalk import (  # noqa: E402
     MAX_BATCH,
     CrosswalkInput,
@@ -40,6 +44,7 @@ from gap_analysis import (  # noqa: E402
     framework_columns,
 )
 from mapper import analyze_audit_scope, load_scf_database, map_text_to_scf  # noqa: E402
+from ui.components.demo_badge import render_demo_badge  # noqa: E402
 from ui.components.sidebar import render_sidebar  # noqa: E402
 from ui.components.styles import inject_premium_css  # noqa: E402
 
@@ -47,6 +52,15 @@ st.set_page_config(page_title="GRC Assistant", page_icon="🛡️", layout="wide
 
 # --- Custom CSS ---
 inject_premium_css()
+
+# --- Demo mode (src/demo.py): refused in production, always badged ---
+try:
+    DEMO_MODE = demo_mode_enabled()
+except DemoModeNotAllowedError as e:
+    st.error(str(e))
+    st.stop()
+if DEMO_MODE:
+    render_demo_badge()
 
 # --- Sidebar Navigation & Setup ---
 app_mode = render_sidebar()
@@ -58,9 +72,15 @@ PRIORITY_FRAMEWORKS = ["gdpr", "iso", "nist", "soc", "pci", "ccpa", "hipaa"]
 MAX_PDF_PAGES = 50
 
 GROQ_NOTICE = (
-    "Text you submit is sent to Groq's API for the LLM step. "
+    "DEMO MODE: nothing is sent to Groq; a canned stand-in picks from the retrieved "
+    "candidates of the synthetic catalog."
+    if DEMO_MODE
+    else "Text you submit is sent to Groq's API for the LLM step. "
     "Do not submit confidential audit data unless your organization allows it."
 )
+
+# Where control text and crosswalk references come from, as shown in labels.
+CATALOG_LABEL = "synthetic demo catalog" if DEMO_MODE else "SCF"
 
 # Characters with meaning in Streamlit Markdown (links, images, emphasis,
 # HTML, colour directives). Model output is escaped before rendering, so a
@@ -143,7 +163,7 @@ def read_uploaded_csv(file) -> pd.DataFrame | None:
 def render_regulations(regulations: dict) -> None:
     if not regulations:
         return
-    st.markdown("#### Framework references (from SCF's crosswalk)")
+    st.markdown(f"#### Framework references (from the {CATALOG_LABEL} crosswalk)")
     display_regs = {
         r: v
         for r, v in regulations.items()
@@ -153,7 +173,9 @@ def render_regulations(regulations: dict) -> None:
         st.markdown(f"- **{md_escape(r)}:** {md_escape(v)}")
     other_regs = len(regulations) - len(display_regs)
     if other_regs > 0:
-        st.caption(f"*(+{other_regs} more framework references in the SCF data)*")
+        st.caption(
+            f"*(+{other_regs} more framework references in the {CATALOG_LABEL} data)*"
+        )
 
 
 def render_rejected(rejected: list[str], what: str = "IDs") -> None:
@@ -325,7 +347,7 @@ if app_mode == "🔍 SCF Auto-Crosswalker":
             st.warning(
                 "Please provide some text, select a lab file, or upload a document to proceed."
             )
-        elif not os.environ.get("GROQ_API_KEY"):
+        elif not DEMO_MODE and not os.environ.get("GROQ_API_KEY"):
             st.error("No GROQ_API_KEY found in .env.")
         elif not scf_db:
             st.error("SCF database not found or empty. Use the sidebar to download it.")
@@ -377,7 +399,7 @@ if app_mode == "🔍 SCF Auto-Crosswalker":
                     expanded=True,
                 ):
                     st.markdown(
-                        f"**Control Description (SCF):** {md_escape(m.description)}"
+                        f"**Control Description ({CATALOG_LABEL}):** {md_escape(m.description)}"
                     )
                     st.markdown(
                         f"**Model Justification:** {md_escape(m.justification)}"
@@ -401,7 +423,7 @@ if app_mode == "🔍 SCF Auto-Crosswalker":
                     expanded=(m_idx < 3),
                 ):
                     st.markdown(
-                        f"**Control Description (SCF):** {md_escape(row['Control Description'])}"
+                        f"**Control Description ({CATALOG_LABEL}):** {md_escape(row['Control Description'])}"
                     )
                     st.markdown(
                         f"**Sample Model Justification:** {md_escape(row['Sample Model Justification'])}"
@@ -746,7 +768,7 @@ elif app_mode == "🎯 Audit Scope Analyzer":
             st.session_state.pop("scope_result", None)
             if not scope_text.strip():
                 st.warning("Please paste or upload an audit scope document.")
-            elif not os.environ.get("GROQ_API_KEY"):
+            elif not DEMO_MODE and not os.environ.get("GROQ_API_KEY"):
                 st.error("No GROQ_API_KEY found in .env.")
             else:
                 with st.spinner(

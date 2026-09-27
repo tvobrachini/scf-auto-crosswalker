@@ -14,6 +14,10 @@ services:
     env_file:
       - path: .env
         required: false
+    # DEMO_MODE=1 (from the shell or .env) runs the synthetic demo: no Groq
+    # key, no SCF download and no Hugging Face download.
+    environment:
+      DEMO_MODE: ${DEMO_MODE:-0}
     restart: unless-stopped
 
 volumes:
