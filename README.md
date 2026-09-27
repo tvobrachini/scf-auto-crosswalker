@@ -4,7 +4,7 @@
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Python 3.11 | 3.12 | 3.13](https://img.shields.io/badge/python-3.11%20%7C%203.12%20%7C%203.13-blue.svg)](pyproject.toml)
 
-Before an auditor can test anything, they have to answer a mapping question: which control does this policy, finding or scope actually concern? With the Secure Controls Framework (SCF) that means searching more than 1,400 controls in a spreadsheet, for every new input. SCF Auto-Crosswalker is a personal project that shortens that first pass. It narrows the SCF down with embedding search, asks a language model to pick from the shortlist, and then checks every answer against that shortlist, so only real SCF controls, with SCF's own text, reach the screen. Results export to CSV and to OSCAL, and an evaluation harness scores the pipeline against AWS's and SCF's published NIST SP 800-53 mappings. The result is a set of suggestions for a person to accept or reject, not a mapping of record.
+Before an auditor can test anything, they have to answer a mapping question: which control does this policy, finding or scope actually concern? With the Secure Controls Framework (SCF) that means searching 1,591 controls (release 2026.3) in a spreadsheet, for every new input. SCF Auto-Crosswalker is a personal project that shortens that first pass. It narrows the SCF down with embedding search, asks a language model to pick from the shortlist, and then checks every answer against that shortlist, so only real SCF controls, with SCF's own text, reach the screen. Results export to CSV and to OSCAL. Measured against AWS's and SCF's published NIST SP 800-53 mappings on 221 Security Hub controls, the retrieval step puts a linked SCF control among the model's 50 candidates for 62% of them, against 46% for keyword matching and 23% by chance ([Evaluation](#evaluation)); the model step itself has not been scored yet. The result is a set of suggestions for a person to accept or reject, not a mapping of record.
 
 > [!IMPORTANT]
 > **Disclaimer:** This is an independent, personal project developed on personal time. It is not affiliated with, sponsored by or endorsed by any current or past employer, or by the Secure Controls Framework.
@@ -78,6 +78,12 @@ Audit Scope Analyzer on the lab scope: suggested domains and controls to test, t
 </td>
 </tr>
 </table>
+
+**And on real data.** The Gap Analyzer needs no language model, so it can run against the real SCF release without a Groq key. This is SCF 2026.3 (1,591 controls, from the official SCF repository) against the SOC 2 column, for `lab_data/sample_existing_controls.csv`:
+
+![Gap Analyzer on the real SCF 2026.3 release: 407 controls mapped to SOC 2, 2 listed, 405 not listed, and six IDs that are not SCF IDs](docs/screenshots/gap-analyzer-real-scf-2026-3.png)
+
+407 SCF controls map to SOC 2; 2 are listed in the sample, and 6 of its IDs are flagged as not SCF IDs. Captured with `MODE=real node scripts/capture_screenshots.mjs`. SCF content © Secure Controls Framework (securecontrolsframework.com), CC BY-ND 4.0; shown verbatim with attribution. The SCF data itself is not stored in this repository.
 
 [`lab_data/sample_outputs/`](lab_data/sample_outputs) holds raw outputs from earlier runs with the real SCF and a Groq model, and [`lab_data/README.md`](lab_data/README.md) annotates them. They record the failure modes the current validation was built for: a scope analysis that returned only NIST 800-53 IDs, and control descriptions rewritten by the model.
 

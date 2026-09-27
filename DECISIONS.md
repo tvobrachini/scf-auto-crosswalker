@@ -41,7 +41,7 @@ This file records the design decisions as the code implements them today. Each r
 **Decision.** `_semantic_filter` (`src/mapper.py`) embeds the input with `all-MiniLM-L6-v2` and ranks every SCF control by cosine similarity. The Crosswalker sends the top 50 candidates to the LLM and the Scope Analyzer the top 60. The Scope Analyzer also sends the full list of SCF domains with their ID prefixes, so its domain suggestions can cover the whole framework. The retrieval step replaced keyword matching in commit `5ed1f81`.
 
 **Consequences.**
-- The prompt stays small enough for Groq's free-tier limits instead of carrying roughly 1,400 controls.
+- The prompt stays small enough for Groq's free-tier limits instead of carrying all 1,591 controls (SCF 2026.3).
 - The model can only pick a control that retrieval found: validation (ADR-004) accepts only candidate IDs. A retrieval miss is an answer miss, which is why the evaluation (ADR-009) measures retrieval on its own.
 - The embedding model truncates at 256 word pieces. The input is therefore embedded in 150-word chunks, and each control keeps its best chunk score (`_chunk_words`). Security Hub findings are first reduced to their descriptive fields (`src/findings.py`), because roughly the first 700 characters of a raw finding are ARNs, IDs and timestamps.
 - Control embeddings are cached in `data/scf_embeddings.npz` together with a SHA-256 fingerprint of the embedding model name and every control text. A cache whose fingerprint or row count does not match the current database is rebuilt, so row *i* always belongs to control *i*.
