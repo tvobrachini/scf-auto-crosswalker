@@ -19,6 +19,11 @@ venv.bak/
 # generated at runtime and must not be committed or redistributed (CC BY-ND 4.0).
 data/
 
+# Evaluation inputs hold AWS documentation text (Security Hub control titles and
+# descriptions, CC BY-SA 4.0). Only IDs and numbers are committed from eval/.
+eval/gold.csv
+eval/standards_controls.json
+
 # IDE & OS
 .idea/
 .vscode/

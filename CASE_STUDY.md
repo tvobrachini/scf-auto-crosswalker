@@ -8,7 +8,7 @@
 
 ## The problem
 
-Before an auditor can test a control, they have to decide which control a piece of evidence concerns. A new policy, an AWS Security Hub finding or an audit scope has to be placed against a control framework. With the SCF that means searching more than 1,400 controls in a spreadsheet for each input. The work is slow, it is repeated for every new document, and two people often place the same finding differently.
+Before an auditor can test a control, they have to decide which control a piece of evidence concerns. A new policy, an AWS Security Hub finding or an audit scope has to be placed against a control framework. With the SCF that means searching 1,591 controls (release 2026.3) in a spreadsheet for each input. The work is slow, it is repeated for every new document, and two people often place the same finding differently.
 
 Language models can shorten that first pass, but they introduce a new risk for audit work: an answer that looks right but refers to a control that does not exist, or that paraphrases a control's text into something the framework never said. In an audit file, both are errors of fact.
 
@@ -32,11 +32,15 @@ A third tool, the Gap Analyzer, uses no model at all. It lists the SCF controls 
 
 ## Measuring it
 
-A mapping tool needs a number, and hand-labeled gold sets are expensive. `scripts/run_eval.py` builds one from two published mappings instead: AWS's mapping of each Security Hub control to NIST SP 800-53, and SCF's mapping of its controls to NIST SP 800-53. It reports retrieval hit rate and recall at k, which needs no API key, and optionally the precision of the model's suggestions. The labels are transitive, so the result measures consistency with AWS's and SCF's published mappings rather than ground truth. [`eval/README.md`](eval/README.md) explains the method, and the results go there once it has been run.
+A mapping tool needs a number, and hand-labeled gold sets are expensive. `scripts/run_eval.py` builds one from two published mappings instead: AWS's mapping of each Security Hub control to NIST SP 800-53, and SCF's mapping of its controls to NIST SP 800-53. It reports retrieval hit rate, recall and MRR at k, which needs no API key, and optionally the precision of the model's suggestions. The labels are transitive, so the result measures consistency with AWS's and SCF's published mappings rather than ground truth.
+
+The first run scored retrieval only, on SCF 2026.3 and the 221 Security Hub controls in the AWS user guide (as of March 2023) that cite NIST SP 800-53. Two things came out of it before any number did. First, the join was silently broken: SCF writes `AC-02(01)` where AWS writes `AC-2(1)`, so about half the cases and 82% of the gold links were missing until both sides were normalized. Second, a hit rate alone means little when a case can have 28 gold controls, so the report puts it next to the exact expectation for random ranking and a TF-IDF baseline.
+
+The result is modest. At k = 50, the shortlist the model sees, 62% of cases include a control the published mappings link to the finding (TF-IDF 46%, random 23%), and the top-ranked control is linked in 11% of cases. For the other 38%, the model cannot agree with the published mappings whatever it does, which makes retrieval, not the model, the first thing to improve. The embedding model ran from an ONNX export verified by hash, because Hugging Face was out of reach, and the model step is still unscored. [`eval/README.md`](eval/README.md) has the full tables, provenance and caveats.
 
 ## Limitations
 
-- No evaluation results are published yet; the harness is in place but has not been run against the live SCF data and a Groq model.
+- Only retrieval has been evaluated. The model step has not been run against a Groq model, so there is no precision figure. The retrieval numbers rest on transitive labels, a March 2023 snapshot of the AWS docs and an ONNX export of the embedding model, not the PyTorch model the app loads.
 - Validation guarantees that a suggested control exists and was among the candidates, not that it fits the input. That judgment stays with the reviewer.
 - Retrieval bounds the answer: a control the embedding search misses cannot be suggested.
 - The sample outputs in `lab_data/` come from an earlier version and show the failure modes described above; `lab_data/README.md` annotates them.
