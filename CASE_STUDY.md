@@ -8,7 +8,7 @@
 
 ## The problem
 
-Before an auditor can test a control, they have to decide which control a piece of evidence concerns. A new policy, an AWS Security Hub finding or an audit scope has to be placed against a control framework. With the SCF that means searching more than 1,400 controls in a spreadsheet for each input. The work is slow, it is repeated for every new document, and two people often place the same finding differently.
+Before an auditor can test a control, they have to decide which control a piece of evidence concerns. A new policy, an AWS Security Hub finding or an audit scope has to be placed against a control framework. With the SCF that means searching 1,591 controls (release 2026.3) in a spreadsheet for each input. The work is slow, it is repeated for every new document, and two people often place the same finding differently.
 
 Language models can shorten that first pass, but they introduce a new risk for audit work: an answer that looks right but refers to a control that does not exist, or that paraphrases a control's text into something the framework never said. In an audit file, both are errors of fact.
 
