@@ -59,7 +59,9 @@ def render(labels: Labels, lab_data_dir: str) -> None:
         )
 
         st.markdown("**Or quickly test with Lab Data:**")
-        lab_files = load_lab_files(lab_data_dir, labels.demo_mode, extension=(".txt", ".json"))
+        lab_files = load_lab_files(
+            lab_data_dir, labels.demo_mode, extension=(".txt", ".json")
+        )
         if lab_files:
             colA, colB = st.columns([1, 4])
             selected_lab_file = colA.selectbox(
@@ -210,7 +212,9 @@ def render(labels: Labels, lab_data_dir: str) -> None:
                 st.success("Suggestions ready. Review each one.")
                 st.markdown("### Suggested Controls")
             elif not r.error:
-                st.warning(f"The model returned no valid {labels.catalog_short} controls.")
+                st.warning(
+                    f"The model returned no valid {labels.catalog_short} controls."
+                )
             for m_idx, m in enumerate(r.mappings):
                 with st.expander(
                     f"Suggestion #{m_idx + 1} | {m.control_id} - Domain: {m.domain} | Model confidence: {m.confidence}%",

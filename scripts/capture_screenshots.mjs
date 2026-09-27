@@ -132,7 +132,7 @@ async function main() {
   await page.getByRole("button", { name: /Run Gap Analysis/ }).click();
   await page.getByText(/controls mapped/).first().waitFor();
   await idle(page);
-  await scrollTo(page, page.getByText(/Current Controls Snapshot/), -60);
+  await scrollTo(page, page.getByText(/cannot match anything/), -130);
   await shot(page, "gap-analyzer-metrics");
 
   // 4. Audit Scope Analyzer on the lab scope.

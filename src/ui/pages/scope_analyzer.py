@@ -75,9 +75,7 @@ def render(labels: Labels, lab_data_dir: str) -> None:
                 if uploaded_scope.name.endswith(".pdf"):
                     scope_text, _, cut = extract_pdf_text(uploaded_scope)
                     if cut:
-                        st.warning(
-                            f"Only the first {MAX_PDF_PAGES} pages are used."
-                        )
+                        st.warning(f"Only the first {MAX_PDF_PAGES} pages are used.")
                 else:
                     scope_text = uploaded_scope.getvalue().decode("utf-8")
                 st.success(f"Loaded: {uploaded_scope.name}")
@@ -103,9 +101,7 @@ def render(labels: Labels, lab_data_dir: str) -> None:
         elif not labels.demo_mode and not os.environ.get("GROQ_API_KEY"):
             st.error("No GROQ_API_KEY found in .env.")
         else:
-            with st.spinner(
-                "Retrieving candidate controls and asking the model..."
-            ):
+            with st.spinner("Retrieving candidate controls and asking the model..."):
                 try:
                     analysis = analyze_audit_scope(scope_text)
                 except Exception as e:
@@ -122,7 +118,9 @@ def render(labels: Labels, lab_data_dir: str) -> None:
     if result:
         st.success("Suggestions ready. Review each one.")
         render_rejected(result.rejected_control_ids, labels.catalog_short)
-        render_rejected(result.rejected_domains, labels.catalog_short, what="domain names")
+        render_rejected(
+            result.rejected_domains, labels.catalog_short, what="domain names"
+        )
         if result.capped_control_ids:
             st.caption(
                 f"The model also suggested {md_escape(', '.join(result.capped_control_ids))}, "
