@@ -141,7 +141,7 @@ async function main() {
   await page.getByRole("button", { name: /Suggest Controls to Test/ }).click();
   await page.getByText("Suggested Controls to Test").first().waitFor();
   await idle(page);
-  await scrollTo(page, page.getByText(/not among the .* candidates/), -120);
+  await scrollTo(page, page.getByText(/not among the .* candidates/), -90);
   await shot(page, "scope-analyzer-result");
 
   await ctx.close();

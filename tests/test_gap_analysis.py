@@ -114,6 +114,12 @@ def test_split_refs_and_requirement_key():
     # Other frameworks keep SCF's reference as written.
     assert requirement_key("HIPAA", "164.308(a)(5)") == "164.308(a)(5)"
     assert requirement_key("PCI DSS 4.0.1", "12.1.1") == "12.1.1"
+    assert requirement_key("HIPAA", "164.312(a)(2)(iv)") == "164.312(a)(2)(iv)"
+    assert requirement_key("ISO 27001 2022", "3.0") == "3.0"
+    # TSC category headings are not criteria.
+    assert requirement_key(soc, "P1.0") is None
+    assert requirement_key(soc, "CC1.1") == "CC1.1"
+    assert split_refs("GOV-01 | CRY-03") == ["GOV-01", "CRY-03"]
 
 
 def test_requirement_coverage_rolls_up_and_counts_listed():
@@ -121,7 +127,7 @@ def test_requirement_coverage_rolls_up_and_counts_listed():
     scf = [
         {"control_id": "CRY-01", "regulations": {col: "CC6.1\nCC6.1-POF3"}},
         {"control_id": "CRY-02", "regulations": {col: "CC6.1\nCC6.7"}},
-        {"control_id": "GOV-01", "regulations": {col: "CC10.1"}},
+        {"control_id": "GOV-01", "regulations": {col: "CC10.1\nP1.0"}},
         {"control_id": "HRS-01", "regulations": {"HIPAA": "164.308"}},
     ]
     rows = requirement_coverage(scf, [col], {"CRY-02"})
@@ -160,6 +166,14 @@ def test_own_numbering_with_a_mapping_column(scf_sample):
     )
     known = {c["control_id"] for c in scf_sample}
     assert detect_id_column(df, known) == "SCF Mapping"
+    # Own numbering that collides with one known ID loses to the mapping column.
+    collide = pd.DataFrame(
+        {
+            "Control ID": ["CRY-01", "ACME-2", "ACME-3"],
+            "Mapping": ["IAC-06", "", "GOV-01"],
+        }
+    )
+    assert detect_id_column(collide, known) == "Mapping"
     # No column names a known ID: fall back to the header rules.
     assert detect_id_column(df, {"ZZZ-99"}) == "Control ID"
     report = analyze_gaps(scf_sample, ["AICPA SOC 2 (2017)"], df, "SCF Mapping")
