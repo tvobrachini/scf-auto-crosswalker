@@ -1,0 +1,13 @@
+# Checked-in Streamlit settings (secrets.toml stays git-ignored).
+
+[browser]
+# Streamlit collects usage statistics by default; this app sends nothing it
+# does not need to.
+gatherUsageStats = false
+
+[server]
+# The file watcher walks every imported module, including transformers' lazy
+# modules, and logs a traceback for each optional dependency that is missing
+# (e.g. torchvision). Nothing here needs hot reload in normal use; for
+# development, run with --server.fileWatcherType auto.
+fileWatcherType = "none"

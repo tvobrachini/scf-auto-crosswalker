@@ -18,6 +18,7 @@ You are an expert IT Auditor, Cloud Security Engineer, and Python Architect. You
 - **Validation:** `_validate_mapping_result()` and `_validate_scope_recommendation()` accept only control IDs among the retrieved candidates, enforce top k, and report what they drop. Control domain, description and regulations always come from the database, never from the model. Model text is Markdown-escaped before display and exports go through `to_safe_csv`. Keep all of these rules for any new LLM feature.
 - **Exports:** OSCAL output (`src/exports.py`) stays `draft` / `intersects-with` unless a person has reviewed the maps.
 - **Evaluation:** `src/evaluation.py` + `scripts/run_eval.py`; do not publish numbers without the SCF release, model and date.
+- **Demo mode:** `DEMO_MODE=1` swaps only `load_scf_database`, `_get_embedding_model` and `_get_llm` for the stand-ins in `src/demo.py` (synthetic catalog, never real SCF text or IDs). Keep demo checks out of the rest of the pipeline, keep the badge and export stamps, and never let demo mode activate silently.
 - **Gap Analyzer:** `src/gap_analysis.py` is deterministic (no LLM). "Listed" means the SCF control ID appears in the uploaded list, nothing more.
 
 ## 3. Code Quality & SDLC

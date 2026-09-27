@@ -13,6 +13,76 @@ Design notes: [CASE_STUDY.md](CASE_STUDY.md) (the problem, from the auditor's si
 
 ---
 
+## Try it in 2 minutes (no API keys)
+
+`DEMO_MODE=1` runs all three tools with no Groq key and without calling Groq, Hugging Face or the SCF download (Streamlit's own usage statistics are also turned off, in `.streamlit/config.toml`). Two things are swapped out: the SCF data is replaced by a small synthetic catalog (19 made-up controls with IDs such as `DCRY-01`), and the language model is replaced by a canned stand-in that picks the top retrieved candidates. Everything else runs for real on that data: retrieval ranking, validation, enrichment from the catalog, batch deduplication and ranking, the gap analysis, and the CSV and OSCAL exports. Every page shows a **DEMO MODE** badge, and every export is stamped as demo data.
+
+**With Docker Compose** (serves on http://127.0.0.1:8501)
+
+```bash
+git clone https://github.com/tvobrachini/scf-auto-crosswalker
+cd scf-auto-crosswalker
+DEMO_MODE=1 docker compose up --build
+```
+
+Or put `DEMO_MODE=1` in `.env` (see [`.env.example`](.env.example)) and run `docker compose up --build`.
+
+**Without Docker** (Python 3.11 to 3.13, with [uv](https://docs.astral.sh/uv/))
+
+```bash
+uv sync
+DEMO_MODE=1 uv run streamlit run app.py
+```
+
+Then pick a tool and a **Lab Data** sample: `sample_endpoint_policy.txt` or `aws_securityhub_finding.json` in the Crosswalker, `demo_existing_controls.csv` in the Gap Analyzer, `sample_audit_scope.txt` in the Scope Analyzer.
+
+What the demo does **not** show: how good the real suggestions are. The catalog is not the SCF, the embedder is a hashed bag of words rather than `all-MiniLM-L6-v2`, and the canned model makes no judgment. For the Crosswalker it always returns the top three candidates with fixed confidences (82, 64, 47), and for a scope the top six; both also return `AC-2`, a NIST SP 800-53 ID, on purpose, so you can see validation reject an ID that was not among the candidates. See [ADR-010](DECISIONS.md#adr-010-a-demo-mode-with-a-synthetic-catalog-and-a-canned-model). Demo mode is refused when `ENVIRONMENT` is `production` or `staging`.
+
+---
+
+## What it looks like
+
+All screenshots below are from a `DEMO_MODE=1` run: the catalog is synthetic (not SCF content) and the suggestions come from the canned stand-in, not a language model. The DEMO MODE badge is visible in the sidebar of every screen. Regenerate them with [`scripts/capture_screenshots.mjs`](scripts/capture_screenshots.mjs).
+
+<table>
+<tr>
+<td width="50%">
+
+![Crosswalker, single input: suggested controls for the endpoint policy, and the warning that AC-2 was dropped](docs/screenshots/crosswalker-single-suggestions-and-rejected-id.png)
+
+Crosswalker on the lab endpoint policy: the suggestions, with control text and crosswalk references taken from the catalog, and the warning that the planted `AC-2` was not a candidate and was dropped.
+
+</td>
+<td width="50%">
+
+![Crosswalker, batch: the Security Hub lab export ranked by Priority Score, with CSV and OSCAL export buttons](docs/screenshots/crosswalker-batch-ranked-summary-and-exports.png)
+
+Crosswalker in batch mode on the lab Security Hub export: controls ranked by Priority Score, with the ranked-summary CSV, all-suggestions CSV and OSCAL mapping exports.
+
+</td>
+</tr>
+<tr>
+<td width="50%">
+
+![Gap Analyzer: the demo control list against the SOC 2 column, with metrics and warnings](docs/screenshots/gap-analyzer-metrics.png)
+
+Gap Analyzer on `demo_existing_controls.csv` against the SOC 2 column: controls mapped, listed and not listed, an ID that is not a catalog ID, and two IDs not counted because of their status.
+
+</td>
+<td width="50%">
+
+![Audit Scope Analyzer: suggested domains and controls for the lab scope, the rejected ID and the reasoning](docs/screenshots/scope-analyzer-result.png)
+
+Audit Scope Analyzer on the lab scope: suggested domains and controls to test, the rejected `AC-2`, and the canned reasoning, which says it is demo output.
+
+</td>
+</tr>
+</table>
+
+[`lab_data/sample_outputs/`](lab_data/sample_outputs) holds raw outputs from earlier runs with the real SCF and a Groq model, and [`lab_data/README.md`](lab_data/README.md) annotates them. They record the failure modes the current validation was built for: a scope analysis that returned only NIST 800-53 IDs, and control descriptions rewritten by the model.
+
+---
+
 ## The three tools
 
 | Tool | Input | Language model? | Output |
@@ -23,9 +93,9 @@ Design notes: [CASE_STUDY.md](CASE_STUDY.md) (the problem, from the auditor's si
 
 ---
 
-## Try it
+## Run it with the real SCF data
 
-**Fastest path, no API key: the Gap Analyzer.** It uses no language model and no embedding model; it only needs the SCF download.
+**No API key: the Gap Analyzer.** It uses no language model and no embedding model; it only needs the SCF download.
 
 ```bash
 git clone https://github.com/tvobrachini/scf-auto-crosswalker
@@ -34,12 +104,12 @@ uv sync
 uv run streamlit run app.py
 ```
 
-Open http://localhost:8501, click **Download / Update SCF Data** in the sidebar (it fetches the latest SCF release from GitHub into `data/`), pick **📉 Compliance Gap Analyzer**, choose a framework, and select the lab CSV. The lab list uses its own numbering on purpose, so the analyzer also shows its warning for IDs that are not SCF IDs.
+Open http://localhost:8501, click **Download / Update SCF Data** in the sidebar (it fetches the latest SCF release from GitHub into `data/`), pick **📉 Compliance Gap Analyzer**, choose a framework, and select `sample_existing_controls.csv`. That list uses its own numbering on purpose, so the analyzer also shows its warning for IDs that are not SCF IDs.
 
 **Full setup, with the model-backed tools.** Get a free [Groq API key](https://console.groq.com/keys), then:
 
 ```bash
-cp .env.example .env           # set GROQ_API_KEY in .env
+cp .env.example .env           # set GROQ_API_KEY in .env (and leave DEMO_MODE unset)
 
 # Option A: Docker Compose (serves on http://127.0.0.1:8501)
 docker compose up --build -d
@@ -49,16 +119,6 @@ uv run streamlit run app.py
 ```
 
 The first model-backed run downloads the embedding model (`all-MiniLM-L6-v2`, about 90 MB) from Hugging Face and embeds the SCF once; later runs load the cache. Under Compose, the SCF data and the model cache live in the `scf-data` and `model-cache` volumes; `docker compose down -v` deletes them. Every tool has a **Lab Data** picker that loads the sample inputs in [`lab_data/`](lab_data).
-
----
-
-## What it looks like
-
-![Streamlit UI: a suggested control with its SCF crosswalk references](assets/ui_demo.png)
-
-*Screenshot from an earlier version of the UI (before control text came from the database). The suggestion shown, DCH-05.5 for a laptop-encryption policy, is a weak match, and it is kept here because it shows why the output needs review.*
-
-[`lab_data/sample_outputs/`](lab_data/sample_outputs) holds raw outputs from earlier runs, and [`lab_data/README.md`](lab_data/README.md) annotates them. They record the failure modes the current validation was built for: a scope analysis that returned only NIST 800-53 IDs, and control descriptions rewritten by the model.
 
 ---
 
@@ -114,7 +174,7 @@ The Gap Analyzer (`src/gap_analysis.py`) is deterministic, so the same input alw
 
 ## Security and data handling
 
-- **Data sent to Groq.** The Crosswalker and the Scope Analyzer send the submitted text to Groq's API, and the UI says so next to the submit button. For Security Hub findings, only the extracted fields (title, description, remediation, resource types, severity, compliance status) are sent; other text and JSON is sent as submitted. The Gap Analyzer sends nothing.
+- **Data sent to Groq.** The Crosswalker and the Scope Analyzer send the submitted text to Groq's API, and the UI says so next to the submit button. For Security Hub findings, only the extracted fields (title, description, remediation, resource types, severity, compliance status) are sent; other text and JSON is sent as submitted. The Gap Analyzer sends nothing. In `DEMO_MODE` nothing is sent anywhere.
 - **Local only.** The app has no login. Compose publishes it on `127.0.0.1` only, and the container runs as a non-root user.
 - **Model output is untrusted.** Validation guarantees that a control exists, was among the candidates, and that its text is SCF's. It does not guarantee that the control fits the input. That judgment stays with the reviewer. Model text is Markdown-escaped before display, so a prompt-injected document cannot make the page load an external image or link, and exported CSV cells cannot start a spreadsheet formula.
 - **Supply chain.**
@@ -135,6 +195,8 @@ Set these in `.env` (Compose and the app both read it) or in the environment.
 |---|---|
 | `GROQ_API_KEY` | Groq API key. Required for the Crosswalker and the Scope Analyzer; not needed for the Gap Analyzer. |
 | `GROQ_MODEL` | Groq model ID. Default `llama-3.1-8b-instant`. A larger model gives better choices at a higher cost and latency. |
+| `DEMO_MODE` | `1`/`true`/`yes`/`on` runs the synthetic demo (see [Try it in 2 minutes](#try-it-in-2-minutes-no-api-keys)): no Groq key, no SCF or Hugging Face download. Off by default. |
+| `ENVIRONMENT` | When `production` or `staging`, the app refuses to start with `DEMO_MODE` on. |
 
 ---
 
@@ -157,6 +219,7 @@ The suite needs no network access and no API keys. A bag-of-words encoder stands
 | `tests/test_gap_analysis.py`, `tests/test_findings.py` | Gap matching per crosswalk column, the status filter, ID-column detection, unknown-ID reporting; Security Hub field and control-ID extraction |
 | `tests/test_evaluation.py` | Gold-set construction from Security Hub and SCF mappings, the retrieval and model metrics, and the evaluation CLI end to end |
 | `tests/test_app.py` | Headless Streamlit `AppTest` runs of all three tools with a fake model: single and batch crosswalks, escaping of a malicious justification, results surviving a rerun, export buttons, scope analysis and a gap analysis on the lab CSV |
+| `tests/test_demo.py` | `DEMO_MODE`: activation values and the production guard, every catalog record passing the `SCFControl` schema, determinism with no real model loaded, the rejected `AC-2`, stamped CSV and OSCAL exports (validated with trestle), all three tools end to end in `AppTest` with the badge visible, and demo mode off by default |
 | `tests/test_mapper.py`, `tests/test_validate_mapping.py` | Schemas, prompt context formatting and the validator |
 
 GitHub Actions runs the following on every push and pull request:
@@ -188,6 +251,7 @@ app.py                          Streamlit UI for the three tools
 src/
   fetch_scf.py                  Download and parse the SCF workbook; SCFControl schema
   mapper.py                     Retrieval, model calls, validation and enrichment
+  demo.py                       DEMO_MODE: synthetic catalog, local embedder, canned model
   findings.py                   Security Hub (ASFF) finding → text
   gap_analysis.py               Deterministic gap analysis
   crosswalk.py                  Batch runs, deduplication and ranking
@@ -196,6 +260,8 @@ src/
   ui/components/                Sidebar and styles
 scripts/run_eval.py             Build the gold set and score the pipeline
 scripts/generate_mock_output.py Regenerate lab_data/sample_outputs (needs a Groq key)
+scripts/capture_screenshots.mjs Regenerate docs/screenshots from a DEMO_MODE run (Playwright)
+docs/screenshots/               README screenshots (DEMO_MODE, synthetic catalog)
 eval/                           Evaluation method and results
 lab_data/                       Sample inputs and annotated earlier outputs
 tests/                          Offline test suite

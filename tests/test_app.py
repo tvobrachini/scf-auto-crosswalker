@@ -205,3 +205,11 @@ def test_scope_results_hidden_when_scope_changes(fake_model):
     assert _download_labels(at) == ["📥 Download Test Plan as CSV"]
     at.text_area[0].set_value("A different scope.").run()
     assert _download_labels(at) == []
+
+
+def test_gap_lab_picker_hides_demo_files_outside_demo_mode(scf_db, monkeypatch):
+    monkeypatch.setenv("DEMO_MODE", "")  # empty, so load_dotenv() cannot restore it
+    at = _app("📉 Compliance Gap Analyzer")
+    options = at.selectbox(key="gap_lab").options
+    assert "sample_existing_controls.csv" in options
+    assert "demo_existing_controls.csv" not in options

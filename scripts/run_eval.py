@@ -33,6 +33,7 @@ from evaluation import (  # noqa: E402
     score_retrieval,
     write_gold_csv,
 )
+from demo import demo_mode_enabled  # noqa: E402
 from fetch_scf import read_scf_release  # noqa: E402
 from mapper import (  # noqa: E402
     DEFAULT_GROQ_MODEL,
@@ -53,6 +54,14 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--llm", action="store_true", help="also score the model step")
     parser.add_argument("--limit", type=int, help="score only the first N cases")
     args = parser.parse_args(argv)
+
+    if demo_mode_enabled():
+        # The demo catalog and canned model would produce meaningless numbers
+        # labeled with the real SCF release and model name.
+        print(
+            "DEMO_MODE is on; the evaluation needs the real SCF data. Unset DEMO_MODE."
+        )
+        return 1
 
     scf_data = load_scf_database()
     if not scf_data:

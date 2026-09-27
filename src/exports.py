@@ -6,6 +6,9 @@ from datetime import datetime, timezone
 import pandas as pd
 
 from crosswalk import CrosswalkResult
+from demo import DEMO_CATALOG_TITLE, DEMO_NOTICE, demo_mode_enabled
+
+DEMO_COLUMN = "Demo Notice"
 
 # Spreadsheet apps treat a cell starting with one of these as a formula.
 _FORMULA_PREFIXES = ("=", "+", "-", "@", "\t", "\r")
@@ -17,15 +20,22 @@ def _neutralize(value: object) -> object:
     return value
 
 
-def to_safe_csv(df: pd.DataFrame) -> bytes:
+def to_safe_csv(df: pd.DataFrame, demo: bool | None = None) -> bytes:
     """
     CSV bytes with formula injection neutralized.
 
     Model output and uploaded data are untrusted; a cell such as
     '=HYPERLINK(...)' would run as a formula when the CSV is opened in a
     spreadsheet. Such cells are prefixed with an apostrophe.
+
+    In DEMO_MODE (or with demo=True) every row gets a first "Demo Notice"
+    column, so a demo export cannot be mistaken for real output.
     """
+    if demo is None:
+        demo = demo_mode_enabled()
     safe = df.copy()
+    if demo:
+        safe.insert(0, DEMO_COLUMN, DEMO_NOTICE)
     for col in safe.columns:
         if safe[col].dtype == object:
             safe[col] = safe[col].map(_neutralize)
@@ -57,6 +67,7 @@ def oscal_mapping_collection(
     title: str = "SCF Auto-Crosswalker suggestions",
     scf_version: str | None = None,
     last_modified: str | None = None,
+    demo: bool | None = None,
 ) -> dict:
     """
     Build an OSCAL mapping-collection (OSCAL 1.2 mapping model) from crosswalk
@@ -68,7 +79,12 @@ def oscal_mapping_collection(
     Other inputs (policy text, documents) become `statement` sources in a
     second mapping. Targets are SCF controls. Duplicate (source, target)
     pairs are merged, keeping the highest confidence.
+
+    In DEMO_MODE (or with demo=True) the title, remarks, mapping description
+    and target resource say that the data is synthetic demo output.
     """
+    if demo is None:
+        demo = demo_mode_enabled()
     groups: dict[str, dict[tuple[str, str], dict]] = {"control": {}, "statement": {}}
     for index, r in enumerate(results, start=1):
         if r.input.source_id:
@@ -89,13 +105,21 @@ def oscal_mapping_collection(
     # an OSCAL catalog, so the source and target resources are typed with
     # their own tokens and point, by UUID, to back-matter resources that link
     # to where each is published.
-    scf_resource = {
-        "uuid": str(uuid.uuid4()),
-        "title": "Secure Controls Framework (SCF)"
-        + (f", {scf_version}" if scf_version else ""),
-        "description": "SCF control catalog workbook, as published on GitHub.",
-        "rlinks": [{"href": SCF_HREF}],
-    }
+    if demo:
+        scf_resource = {
+            "uuid": str(uuid.uuid4()),
+            "title": DEMO_CATALOG_TITLE,
+            "description": "Synthetic controls written for DEMO_MODE (src/demo.py). "
+            + DEMO_NOTICE,
+        }
+    else:
+        scf_resource = {
+            "uuid": str(uuid.uuid4()),
+            "title": "Secure Controls Framework (SCF)"
+            + (f", {scf_version}" if scf_version else ""),
+            "description": "SCF control catalog workbook, as published on GitHub.",
+            "rlinks": [{"href": SCF_HREF}],
+        }
     hub_resource = {
         "uuid": str(uuid.uuid4()),
         "title": "AWS Security Hub controls reference",
@@ -153,6 +177,11 @@ def oscal_mapping_collection(
         )
 
     remarks = "SCF release: " + (scf_version or "not recorded")
+    description = MAPPING_DESCRIPTION
+    if demo:
+        title = f"[DEMO DATA] {title}"
+        remarks = f"{DEMO_NOTICE} Catalog: {DEMO_CATALOG_TITLE}."
+        description = f"{DEMO_NOTICE} {MAPPING_DESCRIPTION}"
     return {
         "mapping-collection": {
             "uuid": str(uuid.uuid4()),
@@ -167,7 +196,7 @@ def oscal_mapping_collection(
                 "method": "automation",
                 "matching-rationale": "semantic",
                 "status": "draft",
-                "mapping-description": MAPPING_DESCRIPTION,
+                "mapping-description": description,
             },
             "mappings": mappings,
             "back-matter": {"resources": used},
