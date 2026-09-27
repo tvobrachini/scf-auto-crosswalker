@@ -27,9 +27,9 @@ from ui.common import (
 def render(labels: Labels, lab_data_dir: str) -> None:
     st.title("📉 Compliance Gap Analyzer")
     st.markdown(
-        f"List the {labels.catalog_short} controls that the {labels.catalog_label}'s own crosswalk maps to a "
-        f"framework, and check which of them appear, by {labels.catalog_short} control ID, in your "
-        "existing control list. No LLM is used."
+        f"For each requirement of a framework that the {labels.catalog_label}'s own crosswalk cites, "
+        f"check whether any {labels.catalog_short} control mapped to it appears, by "
+        f"{labels.catalog_short} control ID, in your existing control list. No LLM is used."
     )
 
     scf_db = load_scf_database()
@@ -113,9 +113,7 @@ def render(labels: Labels, lab_data_dir: str) -> None:
             picked = st.selectbox(
                 "Status column",
                 status_options,
-                index=status_options.index(detected_status)
-                if detected_status
-                else 0,
+                index=status_options.index(detected_status) if detected_status else 0,
                 help="When set, only rows with an in-place status count as listed.",
             )
             if picked != "(ignore status)":
@@ -198,7 +196,9 @@ def render(labels: Labels, lab_data_dir: str) -> None:
             st.markdown(f"### Gap profile: {md_escape(framework_label)}")
             n_req = len(report.requirements)
             col_r1, col_r2, col_r3 = st.columns(3)
-            col_r1.metric("Requirements SCF maps controls to", n_req)
+            col_r1.metric(
+                f"Requirements {labels.catalog_short} maps controls to", n_req
+            )
             col_r2.metric(
                 "✅ With a listed control",
                 report.requirements_addressed,

@@ -72,7 +72,7 @@ Crosswalker in batch mode on the lab Security Hub export: controls ranked by Pri
 
 ![Gap Analyzer: the demo control list against the SOC 2 column, with metrics and warnings](docs/screenshots/gap-analyzer-metrics.png)
 
-Gap Analyzer on `demo_existing_controls.csv` against the SOC 2 column: controls mapped, listed and not listed, an ID that is not a catalog ID, and two IDs not counted because of their status.
+Gap Analyzer on `demo_existing_controls.csv` against the SOC 2 column: an ID that is not a catalog ID, two IDs not counted because of their status, then coverage per SOC 2 criterion (7 of 14 have a listed control) and per catalog control, with the per-criterion table.
 
 </td>
 <td width="50%">
@@ -89,7 +89,7 @@ Audit Scope Analyzer on the lab scope: suggested domains and controls to test, t
 
 ![Gap Analyzer on the real SCF 2026.3 release: 8 of 69 SOC 2 criteria have a listed control; 6 of 407 mapped SCF controls are listed](docs/screenshots/gap-analyzer-real-scf-2026-3.png)
 
-SCF cites 69 SOC 2 criteria; 8 have at least one SCF control the sample lists as implemented. Counted by SCF control instead, 6 of the 407 mapped controls are listed, which is why the report leads with requirements. The analyzer picked the `SCF Mapping` column because it names the most SCF IDs, and three mapped controls are not counted because their rows are "Partially implemented" or "Planned". Captured with `MODE=real node scripts/capture_screenshots.mjs`. SCF content © Secure Controls Framework (securecontrolsframework.com), CC BY-ND 4.0; unmodified SCF text, truncated to the table width, shown with attribution. The SCF data itself is not stored in this repository.
+SCF cites 69 SOC 2 criteria; 8 have at least one SCF control the sample lists as implemented. Counted by SCF control instead, 6 of the 407 mapped controls are listed, which is why the report leads with requirements. The analyzer picked the `SCF Mapping` column because it names the most SCF IDs, and three mapped controls are not counted because their rows are "Partially implemented" or "Planned". Captured with `MODE=real node scripts/capture_screenshots.mjs`. The table shows framework references and SCF control IDs only, no SCF control text. SCF © Secure Controls Framework (securecontrolsframework.com), CC BY-ND 4.0. The SCF data itself is not stored in this repository.
 
 [`lab_data/sample_outputs/`](lab_data/sample_outputs) holds raw outputs from earlier runs with the real SCF and a Groq model, and [`lab_data/README.md`](lab_data/README.md) annotates them. They record the failure modes the current validation was built for: a scope analysis that returned only NIST 800-53 IDs, and control descriptions rewritten by the model.
 
@@ -265,14 +265,14 @@ It reports retrieval hit rate, mean recall and MRR at k = 1 to 50 (50 is what th
 | 10 | 38.0% | 27.1% | 5.2% |
 | 50 | 62.0% | 46.2% | 22.8% |
 
-At k = 50, 38% of cases have no control among the model's candidates that the published mappings link to the finding, so retrieval is the pipeline's main bottleneck. The embedding search clearly beats word overlap and chance. The labels are transitive, so the numbers measure consistency with AWS's and SCF's published mappings, not whether a suggestion is right. The model step has not been scored yet; `--llm` does it with a Groq key. [`eval/README.md`](eval/README.md) has the method, provenance, all k, a stricter subset, and the caveats.
+At k = 50, 38% of cases have no control among the model's candidates that the published mappings link to the Security Hub control, so retrieval is the pipeline's main bottleneck. The embedding search clearly beats word overlap and chance. The labels are transitive, so the numbers measure consistency with AWS's and SCF's published mappings, not whether a suggestion is right. The model step has not been scored yet; `--llm` does it with a Groq key. [`eval/README.md`](eval/README.md) has the method, provenance, all k, a stricter subset, and the caveats.
 
 ---
 
 ## Project structure
 
 ```text
-app.py                          Streamlit UI for the three tools
+app.py                          Streamlit entry point: sidebar and page dispatch
 src/
   fetch_scf.py                  Download and parse the SCF workbook; SCFControl schema
   mapper.py                     Retrieval, model calls, validation and enrichment
@@ -283,7 +283,9 @@ src/
   exports.py                    Formula-safe CSV and OSCAL mapping export
   evaluation.py                 Gold-set construction, metrics and baselines
   onnx_encoder.py               ONNX stand-in for the embedding model (evaluation only)
-  ui/components/                Sidebar and styles
+  ui/common.py                  Helpers and labels shared by the pages
+  ui/pages/                     One module per tool (crosswalker, gap_analyzer, scope_analyzer)
+  ui/components/                Sidebar, demo badge and styles
 scripts/run_eval.py             Build the gold set and score the pipeline
 scripts/import_awsdocs_controls.py  Security Hub controls from the public user guide sources
 scripts/generate_mock_output.py Regenerate lab_data/sample_outputs (needs a Groq key)
