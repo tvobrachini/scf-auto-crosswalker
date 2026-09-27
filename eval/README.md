@@ -30,10 +30,14 @@ uv run python scripts/import_awsdocs_controls.py --repo awsdocs   # -> data/awsd
 # 2. Build eval/gold.csv and score retrieval. No Groq key needed.
 uv run python scripts/run_eval.py --controls data/awsdocs_controls.json
 
-# 2b. Same, with the ONNX export of all-MiniLM-L6-v2 instead of Hugging Face
-#     (download and verify it as described under Results).
+# 2b. Same, with the ONNX export of all-MiniLM-L6-v2 instead of Hugging Face.
+#     The archive hash is the one chromadb pins; run_eval.py then refuses any
+#     model.onnx other than the one the published results used.
+curl -sSLo onnx.tar.gz https://chroma-onnx-models.s3.amazonaws.com/all-MiniLM-L6-v2/onnx.tar.gz
+echo "913d7300ceae3b2dbc2c50d1de4baacab4be7b9380491c27fab7418616a16ec3  onnx.tar.gz" | sha256sum -c -
+tar xzf onnx.tar.gz   # -> onnx/model.onnx, onnx/tokenizer.json
 uv run --with onnxruntime python scripts/run_eval.py \
-    --controls data/awsdocs_controls.json --onnx-model <dir with model.onnx>
+    --controls data/awsdocs_controls.json --onnx-model onnx
 
 # 3. Score the model step too: one Groq call per case.
 uv run python scripts/run_eval.py --gold eval/gold.csv --llm
@@ -45,7 +49,7 @@ The report is written to `eval/results.md` and the per-case ranks to `eval/per_c
 
 | Stage | Metric | Meaning |
 |---|---|---|
-| Retrieval | Hit rate @k | Share of cases where at least one gold control is among the top k retrieved candidates. At k = 50 (what the model sees), a miss means the model cannot give a correct answer. |
+| Retrieval | Hit rate @k | Share of cases where at least one gold control is among the top k retrieved candidates. At k = 50 (what the model sees), a miss means the model cannot give an answer the gold set counts as correct. |
 | Retrieval | Mean recall @k | Mean share of each case's gold controls found in the top k. |
 | Retrieval | MRR @k | Mean of 1 / (rank of the first gold control), counting 0 when none is in the top k. It rewards putting a gold control near the top, not just somewhere in the top k. |
 | Baseline | Random (expected) | The exact expectation of each metric for a retriever that ranks the 1,591 controls at random, given each case's gold-set size. Big gold sets make hit rate cheap; this is the floor. |

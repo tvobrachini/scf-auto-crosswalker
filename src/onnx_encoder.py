@@ -30,6 +30,8 @@ CHROMA_ONNX_URL = (
     "https://chroma-onnx-models.s3.amazonaws.com/all-MiniLM-L6-v2/onnx.tar.gz"
 )
 CHROMA_ONNX_SHA256 = "913d7300ceae3b2dbc2c50d1de4baacab4be7b9380491c27fab7418616a16ec3"  # pragma: allowlist secret (a file hash)
+# SHA-256 of onnx/model.onnx inside that archive: the file eval/results.md used.
+MODEL_ONNX_SHA256 = "4f148ba8ae9c2c7fbee4af2b132db8d06c6a6545b47fc83bbb98c3d22b8393e6"  # pragma: allowlist secret (a file hash)
 
 # sentence-transformers' max_seq_length for all-MiniLM-L6-v2. The tokenizer.json
 # shipped with the model says 128; sentence-transformers overrides it with 256.

@@ -217,7 +217,15 @@ def test_run_eval_cli_end_to_end(monkeypatch, tmp_path, fake_embeddings):
     monkeypatch.setattr(mapper, "DATA_DIR", str(tmp_path))
     monkeypatch.setattr(onnx_encoder, "load_onnx_encoder", lambda d: fake_embeddings)
     gold = str(tmp_path / "gold.csv")
-    assert run_eval.main(["--gold", gold, "--onnx-model", str(tmp_path)]) == 0
+    # A model.onnx other than the pinned one is refused unless asked for.
+    with pytest.raises(SystemExit, match="not the pinned"):
+        run_eval.main(["--gold", gold, "--onnx-model", str(tmp_path)])
+    assert (
+        run_eval.main(
+            ["--gold", gold, "--onnx-model", str(tmp_path), "--allow-unverified-onnx"]
+        )
+        == 0
+    )
     assert mapper.EMBEDDINGS_CACHE_FILE.endswith("scf_embeddings_onnx.npz")
     assert mapper._get_embedding_model() is fake_embeddings
     results = (tmp_path / "results.md").read_text()
