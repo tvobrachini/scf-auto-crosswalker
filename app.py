@@ -532,7 +532,10 @@ elif app_mode == "📉 Compliance Gap Analyzer":
         with colA:
             st.markdown("### Upload Existing Controls")
             st.markdown(
-                f"Upload a CSV of your current controls. The ID column must use **{CATALOG_SHORT} control IDs** (e.g. `{EXAMPLE_ID}`)."
+                f"Upload a CSV of your current controls. Pick the column that holds **{CATALOG_SHORT} control IDs** "
+                f"(e.g. `{EXAMPLE_ID}`): the ID column if you number controls the {CATALOG_SHORT} way, or a column "
+                f"that maps each of your controls to {CATALOG_SHORT} IDs. A cell can hold several IDs, separated "
+                "by `;`, `,` or new lines."
             )
             uploaded_csv = st.file_uploader("Upload CSV", type=["csv"], key="gap_up")
 
@@ -561,9 +564,11 @@ elif app_mode == "📉 Compliance Gap Analyzer":
                 columns = [str(c) for c in df_existing.columns]
                 df_existing.columns = columns
                 id_column = st.selectbox(
-                    f"Column holding {CATALOG_SHORT} control IDs",
+                    f"Column holding {CATALOG_SHORT} control IDs (detected)",
                     columns,
-                    index=columns.index(detect_id_column(df_existing)),
+                    index=columns.index(
+                        detect_id_column(df_existing, {c["control_id"] for c in scf_db})
+                    ),
                 )
                 status_options = ["(ignore status)"] + columns
                 detected_status = detect_status_column(df_existing)
@@ -653,30 +658,57 @@ elif app_mode == "📉 Compliance Gap Analyzer":
                 df_gaps = df_req[df_req["Status"] == STATUS_GAP]
 
                 st.markdown(f"### Gap profile: {md_escape(framework_label)}")
+                n_req = len(report.requirements)
+                col_r1, col_r2, col_r3 = st.columns(3)
+                col_r1.metric("Requirements SCF maps controls to", n_req)
+                col_r2.metric(
+                    "✅ With a listed control",
+                    report.requirements_addressed,
+                    # A share, not a change: no arrow, one decimal.
+                    delta=f"{report.requirements_addressed / n_req * 100:.1f}% of requirements"
+                    if n_req
+                    else None,
+                    delta_color="off",
+                    delta_arrow="off",
+                )
+                col_r3.metric("❌ With none", n_req - report.requirements_addressed)
                 col_m1, col_m2, col_m3 = st.columns(3)
                 col_m1.metric(f"{CATALOG_SHORT} controls mapped", len(report.rows))
                 col_m2.metric(
                     "✅ Listed in your controls",
                     report.covered,
-                    # A share, not a change: no arrow, one decimal (2 of 407 is 0.5%, not 0%).
                     delta=f"{report.covered / len(report.rows) * 100:.1f}% of mapped",
                     delta_color="off",
                     delta_arrow="off",
                 )
                 col_m3.metric("❌ Not listed", report.gaps)
                 st.caption(
-                    f"“Listed” means the {CATALOG_SHORT} control ID appears in your list (with an in-place status, "
-                    "if a status column is used). It says nothing about whether the control is "
-                    "designed or operating effectively."
+                    "Requirements are the framework's own references as the "
+                    f"{CATALOG_SHORT} crosswalk cites them (SOC 2 points of focus roll up to "
+                    "their criterion, ISO 27001 list items to their clause). A requirement "
+                    "with a listed control is a place to start testing, not a requirement met. "
+                    f"“Listed” means the {CATALOG_SHORT} control ID appears in your list (with an "
+                    "in-place status, if a status column is used). It says nothing about "
+                    "whether the control is designed or operating effectively."
                 )
 
                 file_stub = gap_state["framework"].replace(" ", "_")
-                tab_gaps, tab_all = st.tabs(
+                df_reqs = pd.DataFrame(report.requirements)
+                tab_reqs, tab_gaps, tab_all = st.tabs(
                     [
-                        f"❌ Not listed ({len(df_gaps)})",
+                        f"By requirement ({len(df_reqs)})",
+                        f"❌ Controls not listed ({len(df_gaps)})",
                         f"Full Checklist ({len(df_req)})",
                     ]
                 )
+                with tab_reqs:
+                    st.dataframe(df_reqs, width="stretch")
+                    st.download_button(
+                        "📥 Download Requirements as CSV",
+                        data=to_safe_csv(df_reqs),
+                        file_name=f"requirements_{file_stub}.csv",
+                        mime="text/csv",
+                    )
                 with tab_gaps:
                     if df_gaps.empty:
                         st.success(

@@ -7,6 +7,17 @@ import pandas as pd
 
 STATUS_COVERED = "✅ Listed"
 STATUS_GAP = "❌ Not listed"
+REQ_ADDRESSED = "✅ Has a listed control"
+REQ_OPEN = "❌ No listed control"
+
+# One cell of an SCF crosswalk column, or of an uploaded ID column, can hold
+# several references ("CC1.1\nCC1.2", "IAC-06; CRY-03").
+_MULTI = re.compile(r"[\n;,|]+")
+# Roll-ups to the level a framework is assessed at: SOC 2 points of focus
+# (CC1.1-POF1) to their criterion, ISO 27001 list items (6.1.1(e)(1)) to their
+# clause. Other frameworks keep SCF's references as written.
+_POINT_OF_FOCUS = re.compile(r"-POF\d+$", re.IGNORECASE)
+_LIST_ITEM = re.compile(r"(?:\([a-z0-9]{1,3}\))+$", re.IGNORECASE)
 
 # Status values counted as "in place" by default when the user picks a
 # status column: anything mentioning implemented/in place/active/yes, unless
@@ -25,6 +36,8 @@ class GapReport:
     unknown_ids: list[str] = field(default_factory=list)
     # SCF IDs present in the list but excluded by the status filter.
     excluded_by_status: list[str] = field(default_factory=list)
+    # One row per framework requirement SCF cites (see requirement_coverage).
+    requirements: list[dict] = field(default_factory=list)
 
     @property
     def covered(self) -> int:
@@ -33,6 +46,74 @@ class GapReport:
     @property
     def gaps(self) -> int:
         return len(self.rows) - self.covered
+
+    @property
+    def requirements_addressed(self) -> int:
+        return sum(1 for r in self.requirements if r["Status"] == REQ_ADDRESSED)
+
+
+def split_refs(cell: object) -> list[str]:
+    """The individual references in one cell, in order, without blanks."""
+    return [part.strip() for part in _MULTI.split(str(cell)) if part.strip()]
+
+
+def requirement_key(column: str, ref: str) -> str:
+    """
+    The requirement a reference belongs to, at the level the framework is
+    assessed: 'CC1.1-POF1' -> 'CC1.1' for SOC 2, '6.1.1(e)(1)' -> '6.1.1' for
+    ISO 27001. Other references are returned unchanged.
+    """
+    name = column.lower()
+    if "soc 2" in name or "tsc" in name:
+        return _POINT_OF_FOCUS.sub("", ref)
+    if "iso" in name and "27001" in name:
+        return _LIST_ITEM.sub("", ref)
+    return ref
+
+
+def _natural(text: str) -> list:
+    return [int(t) if t.isdigit() else t for t in re.split(r"(\d+)", text)]
+
+
+def requirement_coverage(
+    scf_data: list[dict], columns: list[str], listed_ids: set[str]
+) -> list[dict]:
+    """
+    One row per framework requirement that SCF maps at least one control to,
+    with the SCF controls mapped to it and which of them are listed.
+
+    A requirement with a listed control is not met: SCF's mappings vary in
+    strength, and one control rarely covers a whole requirement. It is a place
+    to start testing, and a requirement with none is a clear gap.
+    """
+    mapped: dict[tuple[str, str], list[str]] = {}
+    for control in scf_data:
+        regs = control.get("regulations") or {}
+        for col in columns:
+            for ref in split_refs(regs.get(col, "")):
+                ids = mapped.setdefault((col, requirement_key(col, ref)), [])
+                if control["control_id"] not in ids:
+                    ids.append(control["control_id"])
+
+    rows = []
+    for (col, requirement), ids in sorted(
+        mapped.items(), key=lambda item: (item[0][0], _natural(item[0][1]))
+    ):
+        listed = [cid for cid in ids if cid.upper() in listed_ids]
+        rows.append(
+            {
+                "Status": REQ_ADDRESSED if listed else REQ_OPEN,
+                "Requirement": requirement
+                if len(columns) == 1
+                else f"{col}: {requirement}",
+                "SCF controls mapped": len(ids),
+                "Listed SCF controls": ", ".join(listed),
+                "Not listed SCF controls": ", ".join(
+                    cid for cid in ids if cid not in listed
+                ),
+            }
+        )
+    return rows
 
 
 def framework_columns(scf_data: list[dict], framework: str) -> list[str]:
@@ -57,14 +138,28 @@ def _words(name: object) -> list[str]:
     return re.findall(r"[a-z0-9]+", str(name).lower())
 
 
-def detect_id_column(df: pd.DataFrame) -> str:
+def detect_id_column(df: pd.DataFrame, known_ids: set[str] | None = None) -> str:
     """
     The column most likely to hold control IDs.
 
-    Prefers a column whose words are exactly "control id", "scf id" or
-    "scf control id", then any column containing the words "control" and "id"
-    (whole words, so "Control Provider" does not count), else the first column.
+    With `known_ids`, the column whose cells name the most of them wins, so a
+    list with its own numbering and an "SCF Mapping" column picks the mapping.
+    Otherwise (or if no column names any), prefers a column whose words are
+    exactly "control id", "scf id" or "scf control id", then any column
+    containing the words "control" and "id" (whole words, so "Control
+    Provider" does not count), else the first column.
     """
+    if known_ids:
+        known = {i.upper() for i in known_ids}
+        hits = {
+            str(col): sum(
+                ref.upper() in known for v in df[col].dropna() for ref in split_refs(v)
+            )
+            for col in df.columns
+        }
+        best = max(hits, key=lambda col: hits[col])
+        if hits[best]:
+            return best
     exact = {("control", "id"), ("scf", "id"), ("scf", "control", "id"), ("id",)}
     for col in df.columns:
         if tuple(_words(col)) in exact:
@@ -113,9 +208,8 @@ def analyze_gaps(
     id_column = id_column or detect_id_column(existing)
 
     def ids(frame: pd.DataFrame) -> set[str]:
-        return {
-            str(v).strip().upper() for v in frame[id_column].dropna() if str(v).strip()
-        }
+        # A cell may list several IDs, e.g. a mapping column "IAC-06; CRY-03".
+        return {ref.upper() for v in frame[id_column].dropna() for ref in split_refs(v)}
 
     all_ids = ids(existing)
     counted = existing
@@ -154,4 +248,5 @@ def analyze_gaps(
         id_column=str(id_column),
         unknown_ids=sorted(all_ids - scf_ids),
         excluded_by_status=sorted((all_ids & scf_ids) - existing_ids),
+        requirements=requirement_coverage(scf_data, list(columns), existing_ids),
     )
