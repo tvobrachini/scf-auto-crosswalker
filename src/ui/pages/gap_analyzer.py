@@ -73,7 +73,7 @@ def render(labels: Labels, lab_data_dir: str) -> None:
             f"Upload a CSV of your current controls. Pick the column that holds **{labels.catalog_short} control IDs** "
             f"(e.g. `{labels.example_id}`): the ID column if you number controls the {labels.catalog_short} way, or a column "
             f"that maps each of your controls to {labels.catalog_short} IDs. A cell can hold several IDs, separated "
-            "by `;`, `,` or new lines."
+            "by `;`, `,`, `|` or new lines."
         )
         uploaded_csv = st.file_uploader("Upload CSV", type=["csv"], key="gap_up")
 
@@ -231,7 +231,14 @@ def render(labels: Labels, lab_data_dir: str) -> None:
             )
 
             file_stub = gap_state["framework"].replace(" ", "_")
-            df_reqs = pd.DataFrame(report.requirements)
+            # Column names follow the catalog in use (SCF or the demo catalog).
+            df_reqs = pd.DataFrame(report.requirements).rename(
+                columns={
+                    "SCF controls mapped": f"{labels.catalog_short} controls mapped",
+                    "Listed SCF controls": f"Listed {labels.catalog_short} controls",
+                    "Not listed SCF controls": f"Not listed {labels.catalog_short} controls",
+                }
+            )
             tab_reqs, tab_gaps, tab_all = st.tabs(
                 [
                     f"By requirement ({len(df_reqs)})",

@@ -17,10 +17,10 @@ The real tools need a Groq key in `.env` (see `.env.example`) and the SCF downlo
 Run what CI runs:
 
 ```bash
+uv sync --frozen              # fails if uv.lock is out of date
 uv run pre-commit run --all-files
-uv run pyright
-uv run pytest                 # offline; fails under 85% coverage
-uv lock --check
+uv run pyright src/
+uv run pytest tests/ --cov=src --cov-fail-under=85   # offline
 ```
 
 Tests must not call Groq, Hugging Face or the SCF download; use the fakes in `tests/conftest.py` (see ADR-007 in [DECISIONS.md](DECISIONS.md)).

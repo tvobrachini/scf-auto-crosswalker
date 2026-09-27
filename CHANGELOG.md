@@ -5,8 +5,8 @@ Notable changes. Dates are UTC.
 ## [Unreleased]
 
 ### Added
-- Gap Analyzer reports coverage per framework requirement (for example, 8 of 69 SOC 2 criteria with a listed control), with a *By requirement* tab and CSV. SOC 2 points of focus roll up to their criterion and ISO 27001 list items to their clause (ADR-011).
-- Control lists with their own numbering work through an SCF mapping column. The ID column is detected by which column names the most SCF IDs, and a cell can hold several IDs. New sample `lab_data/sample_controls_with_scf_mapping.csv`.
+- Gap Analyzer reports coverage per framework requirement (for example, 8 of 61 SOC 2 criteria with a listed control), with a *By requirement* tab and CSV. SOC 2 points of focus roll up to their criterion and ISO 27001 list items to their clause (ADR-011).
+- Control lists with their own numbering work through an SCF mapping column. The ID column is detected by the share of its values that are SCF IDs, and a cell can hold several IDs. New sample `lab_data/sample_controls_with_scf_mapping.csv`.
 - `CONTRIBUTING.md`.
 
 ### Changed
@@ -15,7 +15,7 @@ Notable changes. Dates are UTC.
 
 ## [0.1.0] - 2026-09-27
 
-First tagged release.
+The state of `main` at commit `9531561`.
 
 ### Added
 - Three tools: SCF Auto-Crosswalker (policy text, documents and Security Hub findings), Compliance Gap Analyzer, Audit Scope Analyzer.

@@ -17,6 +17,10 @@ _MULTI = re.compile(r"[\n;,|]+")
 # (CC1.1-POF1) to their criterion, ISO 27001 list items (6.1.1(e)(1)) to their
 # clause. Other frameworks keep SCF's references as written.
 _POINT_OF_FOCUS = re.compile(r"-POF\d+$", re.IGNORECASE)
+# TSC category headings ("P1.0 Privacy criteria related to notice") group
+# criteria; they are not criteria themselves.
+_TSC_HEADING = re.compile(r"^(?:CC|PI|A|C|P)\d+\.0$", re.IGNORECASE)
+_SOC2_COLUMN = re.compile(r"\bsoc ?2\b|\btsc\b")
 _LIST_ITEM = re.compile(r"(?:\([a-z0-9]{1,3}\))+$", re.IGNORECASE)
 
 # Status values counted as "in place" by default when the user picks a
@@ -57,14 +61,17 @@ def split_refs(cell: object) -> list[str]:
     return [part.strip() for part in _MULTI.split(str(cell)) if part.strip()]
 
 
-def requirement_key(column: str, ref: str) -> str:
+def requirement_key(column: str, ref: str) -> str | None:
     """
     The requirement a reference belongs to, at the level the framework is
     assessed: 'CC1.1-POF1' -> 'CC1.1' for SOC 2, '6.1.1(e)(1)' -> '6.1.1' for
-    ISO 27001. Other references are returned unchanged.
+    ISO 27001. SOC 2 category headings such as 'P1.0' return None. Other
+    references are returned unchanged.
     """
     name = column.lower()
-    if "soc 2" in name or "tsc" in name:
+    if _SOC2_COLUMN.search(name):
+        if _TSC_HEADING.match(ref):
+            return None
         return _POINT_OF_FOCUS.sub("", ref)
     if "iso" in name and "27001" in name:
         return _LIST_ITEM.sub("", ref)
@@ -91,7 +98,10 @@ def requirement_coverage(
         regs = control.get("regulations") or {}
         for col in columns:
             for ref in split_refs(regs.get(col, "")):
-                ids = mapped.setdefault((col, requirement_key(col, ref)), [])
+                key = requirement_key(col, ref)
+                if key is None:
+                    continue
+                ids = mapped.setdefault((col, key), [])
                 if control["control_id"] not in ids:
                     ids.append(control["control_id"])
 
@@ -142,7 +152,7 @@ def detect_id_column(df: pd.DataFrame, known_ids: set[str] | None = None) -> str
     """
     The column most likely to hold control IDs.
 
-    With `known_ids`, the column whose cells name the most of them wins, so a
+    With `known_ids`, the column whose IDs are most often known wins, so a
     list with its own numbering and an "SCF Mapping" column picks the mapping.
     Otherwise (or if no column names any), prefers a column whose words are
     exactly "control id", "scf id" or "scf control id", then any column
@@ -151,14 +161,16 @@ def detect_id_column(df: pd.DataFrame, known_ids: set[str] | None = None) -> str
     """
     if known_ids:
         known = {i.upper() for i in known_ids}
-        hits = {
-            str(col): sum(
-                ref.upper() in known for v in df[col].dropna() for ref in split_refs(v)
-            )
-            for col in df.columns
-        }
-        best = max(hits, key=lambda col: hits[col])
-        if hits[best]:
+        # Rank by the share of a column's IDs that are known, then by count,
+        # so own numbering that happens to collide with a few SCF IDs
+        # ("NET-01") loses to a mapping column.
+        scores = {}
+        for col in df.columns:
+            refs = [ref.upper() for v in df[col].dropna() for ref in split_refs(v)]
+            hits = sum(ref in known for ref in refs)
+            scores[str(col)] = (hits / len(refs) if refs else 0.0, hits)
+        best = max(scores, key=lambda col: scores[col])
+        if scores[best][1]:
             return best
     exact = {("control", "id"), ("scf", "id"), ("scf", "control", "id"), ("id",)}
     for col in df.columns:
@@ -205,7 +217,8 @@ def analyze_gaps(
     status; it does not check that the control is designed or operating
     effectively.
     """
-    id_column = id_column or detect_id_column(existing)
+    scf_ids = {c["control_id"].upper() for c in scf_data}
+    id_column = id_column or detect_id_column(existing, scf_ids)
 
     def ids(frame: pd.DataFrame) -> set[str]:
         # A cell may list several IDs, e.g. a mapping column "IAC-06; CRY-03".
@@ -218,8 +231,6 @@ def analyze_gaps(
         status = existing[status_column].astype(str).str.strip().str.lower()
         counted = existing[status.isin(allowed)]
     existing_ids = ids(counted)
-
-    scf_ids = {c["control_id"].upper() for c in scf_data}
 
     rows = []
     for control in scf_data:

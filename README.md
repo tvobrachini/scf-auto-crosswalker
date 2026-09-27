@@ -8,7 +8,7 @@ Before an auditor can test anything, they have to answer a mapping question: whi
 
 - **How it works.** Embedding search narrows the SCF to a shortlist, a language model picks from it, and every answer is checked against the shortlist, so only real SCF controls, with SCF's own text, reach the screen. Results export to CSV and OSCAL.
 - **How well the search works.** For 221 AWS Security Hub control definitions, the shortlist of 50 contains an SCF control that AWS's and SCF's published NIST SP 800-53 mappings link to it in 62% of cases (keyword search: 46%; chance: 23%). That is a ceiling on what the model can get right, not an accuracy figure; the model's own picks have not been scored yet ([Evaluation](#evaluation)).
-- **Gap analysis without a model.** A control list is checked against a framework per requirement: with the sample list on SCF 2026.3, 8 of the 69 SOC 2 criteria SCF maps to have a control the list marks as implemented.
+- **Gap analysis without a model.** A control list is checked against a framework per requirement: with the sample list on SCF 2026.3, 8 of the 61 SOC 2 criteria SCF maps to have a control the list marks as implemented.
 
 The result is a set of suggestions for a person to accept or reject, not a mapping of record.
 
@@ -87,9 +87,9 @@ Audit Scope Analyzer on the lab scope: suggested domains and controls to test, t
 
 **And on real data.** The Gap Analyzer needs no language model, so it can run against the real SCF release without a Groq key. This is SCF 2026.3 (1,591 controls, from the official SCF repository) against the SOC 2 column, for `lab_data/sample_controls_with_scf_mapping.csv`, a control list with its own numbering and a column mapping each control to SCF IDs:
 
-![Gap Analyzer on the real SCF 2026.3 release: 8 of 69 SOC 2 criteria have a listed control; 6 of 407 mapped SCF controls are listed](docs/screenshots/gap-analyzer-real-scf-2026-3.png)
+![Gap Analyzer on the real SCF 2026.3 release: 8 of 61 SOC 2 criteria have a listed control; 6 of 407 mapped SCF controls are listed](docs/screenshots/gap-analyzer-real-scf-2026-3.png)
 
-SCF cites 69 SOC 2 criteria; 8 have at least one SCF control the sample lists as implemented. Counted by SCF control instead, 6 of the 407 mapped controls are listed, which is why the report leads with requirements. The analyzer picked the `SCF Mapping` column because it names the most SCF IDs, and three mapped controls are not counted because their rows are "Partially implemented" or "Planned". Captured with `MODE=real node scripts/capture_screenshots.mjs`. The table shows framework references and SCF control IDs only, no SCF control text. SCF © Secure Controls Framework (securecontrolsframework.com), CC BY-ND 4.0. The SCF data itself is not stored in this repository.
+SCF cites 61 SOC 2 criteria across all five categories (33 of them in Security, the common criteria many SOC 2 reports are scoped to); 8 have at least one SCF control the sample lists as implemented. Counted by SCF control instead, 6 of the 407 mapped controls are listed, which is why the report leads with requirements. The analyzer picked the `SCF Mapping` column because it names the most SCF IDs, and three mapped controls are not counted because their rows are "Partially implemented" or "Planned". Captured with `MODE=real node scripts/capture_screenshots.mjs`. The table shows framework references and SCF control IDs only, no SCF control text. SCF © Secure Controls Framework (securecontrolsframework.com), CC BY-ND 4.0. The SCF data itself is not stored in this repository.
 
 [`lab_data/sample_outputs/`](lab_data/sample_outputs) holds raw outputs from earlier runs with the real SCF and a Groq model, and [`lab_data/README.md`](lab_data/README.md) annotates them. They record the failure modes the current validation was built for: a scope analysis that returned only NIST 800-53 IDs, and control descriptions rewritten by the model.
 
@@ -165,7 +165,8 @@ graph TD
 The Gap Analyzer (`src/gap_analysis.py`) is deterministic, so the same input always gives the same answer.
 - It lists the SCF controls that have an entry in the chosen crosswalk column, and checks whether each control ID appears in your CSV.
 - It also inverts the column: for each framework requirement SCF cites, it shows the SCF controls mapped to it and whether any is listed. SOC 2 points of focus roll up to their criterion and ISO 27001 list items to their clause; other references stay as SCF writes them. A requirement with a listed control is a place to start testing, not a requirement met.
-- The ID column is the one that names the most SCF IDs, so a list with its own numbering works through a mapping column; a cell can hold several IDs.
+- The ID column is the one whose values are most often SCF IDs, so a list with its own numbering works through a mapping column; a cell can hold several IDs.
+- Coverage is only as complete as SCF's crosswalk column. For example, SCF 2026.3's ISO 27001 column cites clauses 3 to 10 and no Annex A controls, and SOC 2 category headings (`P1.0`) are not counted as criteria.
 - When SCF has more than one column for a framework (for example, two ISO 27001 editions), you pick one.
 - IDs in your CSV that are not SCF IDs are listed, so they don't fail silently.
 - If the CSV has a status column, you can count only rows with an in-place status ("Not Implemented", "Partially implemented" and "Planned" are excluded by default).
