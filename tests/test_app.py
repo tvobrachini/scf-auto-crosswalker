@@ -192,6 +192,8 @@ def test_gap_results_hidden_when_status_filter_changes(scf_db):
     at.selectbox(key="gap_lab").set_value("sample_existing_controls.csv").run()
     at.button(key="gap_btn").click().run()
     assert any(m.label == "SCF controls mapped" for m in at.metric)
+    assert any(m.label == "Requirements SCF maps controls to" for m in at.metric)
+    assert any(t.label.startswith("By requirement (") for t in at.tabs)
 
     status = next(s for s in at.selectbox if s.label == "Status column")
     status.set_value("(ignore status)").run()
