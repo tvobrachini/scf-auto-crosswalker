@@ -130,7 +130,11 @@ def load_lab_files(extension: str | tuple[str, ...] | None = None):
     )
     if extension:
         files = [f for f in files if f.endswith(extension)]
-    return files
+    # demo_* inputs match only the synthetic demo catalog, and the other
+    # control lists match only real SCF IDs, so each mode lists its own.
+    if DEMO_MODE:
+        return [f for f in files if f.startswith("demo_") or not f.endswith(".csv")]
+    return [f for f in files if not f.startswith("demo_")]
 
 
 def resolve_lab_file(name: str) -> str | None:
