@@ -335,3 +335,11 @@ def test_app_refuses_demo_in_production(demo_on, monkeypatch):
     assert not at.exception
     assert any("not allowed" in e.value for e in at.error)
     assert not at.sidebar.radio
+
+
+def test_gap_lab_picker_lists_only_files_that_can_match(demo_on):
+    """In demo mode only the demo control list is offered, and vice versa."""
+    at = _app("📉 Compliance Gap Analyzer")
+    options = at.selectbox(key="gap_lab").options
+    assert "demo_existing_controls.csv" in options
+    assert "sample_existing_controls.csv" not in options
