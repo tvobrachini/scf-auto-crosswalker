@@ -91,11 +91,12 @@ async function main() {
 
   if (REAL) {
     await openTool(page, "📉 Compliance Gap Analyzer");
-    await pick(page, "Or select Lab Data", "sample_existing_controls.csv");
+    await pick(page, "Or select Lab Data", "sample_controls_with_scf_mapping.csv");
     await page.getByRole("button", { name: /Run Gap Analysis/ }).click();
     await page.getByText(/controls mapped/).first().waitFor();
     await idle(page);
-    await scrollTo(page, page.getByText(/in your list are not SCF control IDs/), -90);
+    // The per-requirement table shows framework references and SCF IDs only.
+    await scrollTo(page, page.getByText(/were not counted/), -90);
     await shot(page, "gap-analyzer-real-scf-2026-3");
     await ctx.close();
     await browser.close();
