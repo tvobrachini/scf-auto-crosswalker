@@ -4,12 +4,18 @@
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Python 3.11 | 3.12 | 3.13](https://img.shields.io/badge/python-3.11%20%7C%203.12%20%7C%203.13-blue.svg)](pyproject.toml)
 
-Before an auditor can test anything, they have to answer a mapping question: which control does this policy, finding or scope actually concern? With the Secure Controls Framework (SCF) that means searching 1,591 controls (release 2026.3) in a spreadsheet, for every new input. SCF Auto-Crosswalker is a personal project that shortens that first pass. It narrows the SCF down with embedding search, asks a language model to pick from the shortlist, and then checks every answer against that shortlist, so only real SCF controls, with SCF's own text, reach the screen. Results export to CSV and to OSCAL. Measured against AWS's and SCF's published NIST SP 800-53 mappings on 221 Security Hub controls, the retrieval step puts a linked SCF control among the model's 50 candidates for 62% of them, against 46% for keyword matching and 23% by chance ([Evaluation](#evaluation)); the model step itself has not been scored yet. The result is a set of suggestions for a person to accept or reject, not a mapping of record.
+Before an auditor can test anything, they have to answer a mapping question: which control does this policy, finding or scope actually concern? With the Secure Controls Framework (SCF) that means searching 1,591 controls (release 2026.3) in a spreadsheet, for every new input. SCF Auto-Crosswalker is a personal project that shortens that first pass.
+
+- **How it works.** Embedding search narrows the SCF to a shortlist, a language model picks from it, and every answer is checked against the shortlist, so only real SCF controls, with SCF's own text, reach the screen. Results export to CSV and OSCAL.
+- **How well the search works.** For 221 AWS Security Hub control definitions, the shortlist of 50 contains an SCF control that AWS's and SCF's published NIST SP 800-53 mappings link to it in 62% of cases (keyword search: 46%; chance: 23%). That is a ceiling on what the model can get right, not an accuracy figure; the model's own picks have not been scored yet ([Evaluation](#evaluation)).
+- **Gap analysis without a model.** A control list is checked against a framework per requirement: with the sample list on SCF 2026.3, 8 of the 69 SOC 2 criteria SCF maps to have a control the list marks as implemented.
+
+The result is a set of suggestions for a person to accept or reject, not a mapping of record.
 
 > [!IMPORTANT]
 > **Disclaimer:** This is an independent, personal project developed on personal time. It is not affiliated with, sponsored by or endorsed by any current or past employer, or by the Secure Controls Framework.
 
-Design notes: [CASE_STUDY.md](CASE_STUDY.md) (the problem, from the auditor's side) and [DECISIONS.md](DECISIONS.md) (architecture decision records).
+Design notes: [CASE_STUDY.md](CASE_STUDY.md) (the problem, from the auditor's side) and [DECISIONS.md](DECISIONS.md) (architecture decision records). Changes: [CHANGELOG.md](CHANGELOG.md). Contributing: [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ---
 
@@ -79,11 +85,11 @@ Audit Scope Analyzer on the lab scope: suggested domains and controls to test, t
 </tr>
 </table>
 
-**And on real data.** The Gap Analyzer needs no language model, so it can run against the real SCF release without a Groq key. This is SCF 2026.3 (1,591 controls, from the official SCF repository) against the SOC 2 column, for `lab_data/sample_existing_controls.csv`:
+**And on real data.** The Gap Analyzer needs no language model, so it can run against the real SCF release without a Groq key. This is SCF 2026.3 (1,591 controls, from the official SCF repository) against the SOC 2 column, for `lab_data/sample_controls_with_scf_mapping.csv`, a control list with its own numbering and a column mapping each control to SCF IDs:
 
-![Gap Analyzer on the real SCF 2026.3 release: 407 controls mapped to SOC 2, 2 listed, 405 not listed, and six IDs that are not SCF IDs](docs/screenshots/gap-analyzer-real-scf-2026-3.png)
+![Gap Analyzer on the real SCF 2026.3 release: 8 of 69 SOC 2 criteria have a listed control; 6 of 407 mapped SCF controls are listed](docs/screenshots/gap-analyzer-real-scf-2026-3.png)
 
-407 SCF controls map to SOC 2; 2 are listed in the sample, and 6 of its IDs (such as `IAM-01`) are flagged as not SCF IDs, because the sample uses its own numbering, as many control lists do (see [`lab_data/README.md`](lab_data/README.md)). Captured with `MODE=real node scripts/capture_screenshots.mjs`. SCF content © Secure Controls Framework (securecontrolsframework.com), CC BY-ND 4.0; unmodified SCF text, truncated to the table width, shown with attribution. The SCF data itself is not stored in this repository.
+SCF cites 69 SOC 2 criteria; 8 have at least one SCF control the sample lists as implemented. Counted by SCF control instead, 6 of the 407 mapped controls are listed, which is why the report leads with requirements. The analyzer picked the `SCF Mapping` column because it names the most SCF IDs, and three mapped controls are not counted because their rows are "Partially implemented" or "Planned". Captured with `MODE=real node scripts/capture_screenshots.mjs`. SCF content © Secure Controls Framework (securecontrolsframework.com), CC BY-ND 4.0; unmodified SCF text, truncated to the table width, shown with attribution. The SCF data itself is not stored in this repository.
 
 [`lab_data/sample_outputs/`](lab_data/sample_outputs) holds raw outputs from earlier runs with the real SCF and a Groq model, and [`lab_data/README.md`](lab_data/README.md) annotates them. They record the failure modes the current validation was built for: a scope analysis that returned only NIST 800-53 IDs, and control descriptions rewritten by the model.
 
@@ -95,7 +101,7 @@ Audit Scope Analyzer on the lab scope: suggested domains and controls to test, t
 |---|---|---|---|
 | 🔍 **SCF Auto-Crosswalker** | Policy text, a PDF/TXT document, or a Security Hub JSON export (one finding or a batch) | Yes | Up to 3 SCF controls per input, with the model's justification and self-reported confidence, and the frameworks SCF maps each control to. Batches (up to 50 distinct findings) are merged per control and ranked. CSV and OSCAL mapping export. |
 | 🎯 **Audit Scope Analyzer** | An audit scope narrative (paste, TXT or PDF) | Yes | Suggested SCF domains and up to 10 SCF controls to test, with each control's SCF question and Evidence Request List reference. CSV export. |
-| 📉 **Compliance Gap Analyzer** | A CSV of your controls (IDs must be SCF IDs) and a framework | No | Every SCF control that SCF's crosswalk maps to the chosen framework column, marked *Listed* or *Not listed* in your CSV (optionally counting only rows with an in-place status). CSV export. |
+| 📉 **Compliance Gap Analyzer** | A CSV of your controls, with SCF IDs or a column mapping them to SCF IDs, and a framework | No | Each framework requirement SCF maps controls to, with or without a listed control, and every mapped SCF control marked *Listed* or *Not listed* (optionally counting only rows with an in-place status). CSV export. |
 
 ---
 
@@ -110,7 +116,7 @@ uv sync
 uv run streamlit run app.py
 ```
 
-Open http://localhost:8501, click **Download / Update SCF Data** in the sidebar (it fetches the latest SCF release from GitHub into `data/`), pick **📉 Compliance Gap Analyzer**, choose a framework, and select `sample_existing_controls.csv`. That list uses its own numbering on purpose, so the analyzer also shows its warning for IDs that are not SCF IDs.
+Open http://localhost:8501, click **Download / Update SCF Data** in the sidebar (it fetches the latest SCF release from GitHub into `data/`), pick **📉 Compliance Gap Analyzer**, choose a framework, and select `sample_controls_with_scf_mapping.csv`. `sample_existing_controls.csv` has no mapping column, so it shows the warning for IDs that are not SCF IDs instead.
 
 **Full setup, with the model-backed tools.** Get a free [Groq API key](https://console.groq.com/keys), then:
 
@@ -158,9 +164,11 @@ graph TD
 
 The Gap Analyzer (`src/gap_analysis.py`) is deterministic, so the same input always gives the same answer.
 - It lists the SCF controls that have an entry in the chosen crosswalk column, and checks whether each control ID appears in your CSV.
+- It also inverts the column: for each framework requirement SCF cites, it shows the SCF controls mapped to it and whether any is listed. SOC 2 points of focus roll up to their criterion and ISO 27001 list items to their clause; other references stay as SCF writes them. A requirement with a listed control is a place to start testing, not a requirement met.
+- The ID column is the one that names the most SCF IDs, so a list with its own numbering works through a mapping column; a cell can hold several IDs.
 - When SCF has more than one column for a framework (for example, two ISO 27001 editions), you pick one.
 - IDs in your CSV that are not SCF IDs are listed, so they don't fail silently.
-- If the CSV has a status column, you can count only rows with an in-place status ("Not Implemented" and "Planned" are excluded by default).
+- If the CSV has a status column, you can count only rows with an in-place status ("Not Implemented", "Partially implemented" and "Planned" are excluded by default).
 
 ---
 
@@ -222,7 +230,7 @@ The suite needs no network access and no API keys. A bag-of-words encoder stands
 | `tests/test_pipeline.py` | The full `map_text_to_scf` and `analyze_audit_scope` flows: only retrieved candidates are accepted (a real SCF control the model was not shown is rejected), top k is enforced, NIST IDs such as `AC-2` and non-SCF domains are rejected, fractional confidence, retrieval beyond the first chunk, embedding-cache rebuilds (changed SCF data, a truncated file), database reloads when the file changes, no retries on authentication errors and a single retry layer |
 | `tests/test_fetch_scf.py` | Download, forced re-download, an interrupted download that leaves the previous file intact; parsing a synthetic SCF workbook, framework columns with any spacing, clamped weights, atomic writes, the release record, and an empty parse |
 | `tests/test_crosswalk.py`, `tests/test_exports.py` | Batch deduplication, per-finding errors, confidence-weighted ranking; formula-safe CSV; the OSCAL mapping-collection, including a parse with compliance-trestle's OSCAL models |
-| `tests/test_gap_analysis.py`, `tests/test_findings.py` | Gap matching per crosswalk column, the status filter, ID-column detection, unknown-ID reporting; Security Hub field and control-ID extraction |
+| `tests/test_gap_analysis.py`, `tests/test_findings.py` | Gap matching per crosswalk column, requirement roll-up and coverage, the status filter, ID-column detection (including mapping columns with several IDs per cell), unknown-ID reporting; Security Hub field and control-ID extraction |
 | `tests/test_evaluation.py`, `tests/test_onnx_encoder.py` | Gold-set construction from Security Hub and SCF mappings (including zero-padded 800-53 IDs), parsing the user guide's control pages, the retrieval and model metrics, the random baseline against brute force, the TF-IDF baseline, the evaluation CLI end to end; the ONNX encoder's truncation, padding, pooling and normalization with a fake session |
 | `tests/test_app.py` | Headless Streamlit `AppTest` runs of all three tools with a fake model: single and batch crosswalks, escaping of a malicious justification, results surviving a rerun, export buttons, scope analysis and a gap analysis on the lab CSV |
 | `tests/test_demo.py` | `DEMO_MODE`: activation values and the production guard, every catalog record passing the `SCFControl` schema, determinism with no real model loaded, the rejected `AC-2`, stamped CSV and OSCAL exports (validated with trestle), all three tools end to end in `AppTest` with the badge visible, and demo mode off by default |
@@ -257,7 +265,7 @@ It reports retrieval hit rate, mean recall and MRR at k = 1 to 50 (50 is what th
 | 10 | 38.0% | 27.1% | 5.2% |
 | 50 | 62.0% | 46.2% | 22.8% |
 
-At k = 50, 38% of cases have no control among the model's candidates that the published mappings link to the finding, so retrieval is the pipeline's main bottleneck. The embedding search clearly beats word overlap and chance. The labels are transitive, so the numbers measure consistency with AWS's and SCF's published mappings, not whether a suggestion is right. The model step has not been scored (no Groq key was available). [`eval/README.md`](eval/README.md) has the method, provenance, all k, a stricter subset, and the caveats.
+At k = 50, 38% of cases have no control among the model's candidates that the published mappings link to the finding, so retrieval is the pipeline's main bottleneck. The embedding search clearly beats word overlap and chance. The labels are transitive, so the numbers measure consistency with AWS's and SCF's published mappings, not whether a suggestion is right. The model step has not been scored yet; `--llm` does it with a Groq key. [`eval/README.md`](eval/README.md) has the method, provenance, all k, a stricter subset, and the caveats.
 
 ---
 
@@ -296,7 +304,7 @@ DECISIONS.md                    Architecture decision records
 - **Confidence is self-reported** by the model and is not calibrated.
 - **Retrieval bounds the answer.** If the right control is not among the retrieved candidates, the model cannot pick it.
 - **One model call per input, whole input sent.** Very long documents can exceed Groq's context window or rate limits. Only retrieval is chunked, not the model call.
-- **Gap analysis compares IDs only.** "Listed" means the SCF ID appears in your list (with an in-place status, if you use the status filter). It does not check control names, design or operating effectiveness, and it requires your list to use SCF IDs.
+- **Gap analysis compares IDs only.** "Listed" means the SCF ID appears in your list (with an in-place status, if you use the status filter). It does not check control names, design or operating effectiveness, and the compared column must hold SCF IDs (your own IDs work through a mapping column). Requirements are those SCF cites, and one listed control does not mean a requirement is met.
 - **OSCAL relationships are not asserted.** Every exported map is `intersects-with` with status `draft`; a reviewer has to confirm or refine each one.
 - **Framework references are SCF's.** The frameworks shown for a control come from SCF's published crosswalk, not from this tool.
 - **Large image.** The locked `torch` is the default CUDA build, so the Docker image is several GB. A CPU-only torch index would shrink it.
