@@ -81,6 +81,10 @@ GROQ_NOTICE = (
 
 # Where control text and crosswalk references come from, as shown in labels.
 CATALOG_LABEL = "synthetic demo catalog" if DEMO_MODE else "SCF"
+# Short form for IDs, domains and buttons ("SCF controls mapped" / "demo catalog controls mapped").
+CATALOG_SHORT = "demo catalog" if DEMO_MODE else "SCF"
+EXAMPLE_ID = "DCRY-01" if DEMO_MODE else "CRY-01"
+DEMO_SUFFIX = " (demo catalog)" if DEMO_MODE else ""
 
 # Characters with meaning in Streamlit Markdown (links, images, emphasis,
 # HTML, colour directives). Model output is escaped before rendering, so a
@@ -185,7 +189,7 @@ def render_regulations(regulations: dict) -> None:
 def render_rejected(rejected: list[str], what: str = "IDs") -> None:
     if rejected:
         st.warning(
-            f"The model also returned {what} that are not among the SCF candidates it "
+            f"The model also returned {what} that are not among the {CATALOG_SHORT} candidates it "
             f"was given, so they were dropped: {', '.join(md_escape(r) for r in rejected)}"
         )
 
@@ -340,7 +344,9 @@ if app_mode == "🔍 SCF Auto-Crosswalker":
     st.caption(GROQ_NOTICE)
     col1, col2, col3 = st.columns([1, 1, 1])
     if col2.button(
-        "🚀 Suggest SCF Controls",
+        "🚀 Suggest Controls (demo catalog)"
+        if DEMO_MODE
+        else "🚀 Suggest SCF Controls",
         type="primary",
         width="stretch",
         key="cw_btn",
@@ -396,7 +402,7 @@ if app_mode == "🔍 SCF Auto-Crosswalker":
                 st.success("Suggestions ready. Review each one.")
                 st.markdown("### Suggested Controls")
             elif not r.error:
-                st.warning("The model returned no valid SCF controls.")
+                st.warning(f"The model returned no valid {CATALOG_SHORT} controls.")
             for m_idx, m in enumerate(r.mappings):
                 with st.expander(
                     f"Suggestion #{m_idx + 1} | {m.control_id} - Domain: {m.domain} | Model confidence: {m.confidence}%",
@@ -417,7 +423,7 @@ if app_mode == "🔍 SCF Auto-Crosswalker":
             st.markdown(f"### 🎯 {len(summary)} Suggested Controls")
             st.info(
                 f"Suggestions for {len(results)} findings ({unique_model_calls([r.input for r in results])} distinct), "
-                "merged by control and ranked by Priority Score: SCF relative weight × the sum of "
+                f"merged by control and ranked by Priority Score: {CATALOG_SHORT} relative weight × the sum of "
                 "model confidences / 100 across the distinct findings that mapped to it (identical "
                 "findings, such as one control failing on many resources, count once)."
             )
@@ -484,8 +490,9 @@ if app_mode == "🔍 SCF Auto-Crosswalker":
 elif app_mode == "📉 Compliance Gap Analyzer":
     st.title("📉 Compliance Gap Analyzer")
     st.markdown(
-        "List the SCF controls that SCF's own crosswalk maps to a framework, and check which "
-        "of them appear, by SCF control ID, in your existing control list. No LLM is used."
+        f"List the {CATALOG_SHORT} controls that the {CATALOG_LABEL}'s own crosswalk maps to a "
+        f"framework, and check which of them appear, by {CATALOG_SHORT} control ID, in your "
+        "existing control list. No LLM is used."
     )
 
     scf_db = load_scf_database()
@@ -510,7 +517,7 @@ elif app_mode == "📉 Compliance Gap Analyzer":
         selected_columns = []
         if matching_columns:
             selected_column = colF2.selectbox(
-                "SCF crosswalk column",
+                f"{CATALOG_SHORT} crosswalk column",
                 matching_columns,
                 help="SCF can have more than one column for a framework (for example, two editions). Pick the one you are assessing against.",
             )
@@ -525,7 +532,7 @@ elif app_mode == "📉 Compliance Gap Analyzer":
         with colA:
             st.markdown("### Upload Existing Controls")
             st.markdown(
-                "Upload a CSV of your current controls. The ID column must use **SCF control IDs** (e.g. `CRY-01`)."
+                f"Upload a CSV of your current controls. The ID column must use **{CATALOG_SHORT} control IDs** (e.g. `{EXAMPLE_ID}`)."
             )
             uploaded_csv = st.file_uploader("Upload CSV", type=["csv"], key="gap_up")
 
@@ -554,7 +561,7 @@ elif app_mode == "📉 Compliance Gap Analyzer":
                 columns = [str(c) for c in df_existing.columns]
                 df_existing.columns = columns
                 id_column = st.selectbox(
-                    "Column holding SCF control IDs",
+                    f"Column holding {CATALOG_SHORT} control IDs",
                     columns,
                     index=columns.index(detect_id_column(df_existing)),
                 )
@@ -627,13 +634,13 @@ elif app_mode == "📉 Compliance Gap Analyzer":
 
             if report.unknown_ids:
                 st.warning(
-                    f"{len(report.unknown_ids)} ID(s) in your list are not SCF control IDs "
+                    f"{len(report.unknown_ids)} ID(s) in your list are not {CATALOG_SHORT} control IDs "
                     f"and cannot match anything: {md_escape(', '.join(report.unknown_ids[:15]))}"
                     + (" ..." if len(report.unknown_ids) > 15 else "")
                 )
             if report.excluded_by_status:
                 st.info(
-                    f"{len(report.excluded_by_status)} SCF ID(s) in your list were not counted "
+                    f"{len(report.excluded_by_status)} {CATALOG_SHORT} ID(s) in your list were not counted "
                     f"because of their status: {md_escape(', '.join(report.excluded_by_status[:15]))}"
                 )
 
@@ -647,7 +654,7 @@ elif app_mode == "📉 Compliance Gap Analyzer":
 
                 st.markdown(f"### Gap profile: {md_escape(framework_label)}")
                 col_m1, col_m2, col_m3 = st.columns(3)
-                col_m1.metric("SCF controls mapped", len(report.rows))
+                col_m1.metric(f"{CATALOG_SHORT} controls mapped", len(report.rows))
                 col_m2.metric(
                     "✅ Listed in your controls",
                     report.covered,
@@ -655,7 +662,7 @@ elif app_mode == "📉 Compliance Gap Analyzer":
                 )
                 col_m3.metric("❌ Not listed", report.gaps)
                 st.caption(
-                    "“Listed” means the SCF control ID appears in your list (with an in-place status, "
+                    f"“Listed” means the {CATALOG_SHORT} control ID appears in your list (with an in-place status, "
                     "if a status column is used). It says nothing about whether the control is "
                     "designed or operating effectively."
                 )
@@ -805,7 +812,11 @@ elif app_mode == "🎯 Audit Scope Analyzer":
             col_d, col_c = st.columns([1, 1])
 
             with col_d:
-                st.markdown("### Suggested SCF Domains")
+                st.markdown(
+                    "### Suggested Domains" + DEMO_SUFFIX
+                    if DEMO_MODE
+                    else "### Suggested SCF Domains"
+                )
                 for domain in result.recommended_domains:
                     st.markdown(f"- **{md_escape(domain)}**")
 

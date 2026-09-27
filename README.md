@@ -15,7 +15,7 @@ Design notes: [CASE_STUDY.md](CASE_STUDY.md) (the problem, from the auditor's si
 
 ## Try it in 2 minutes (no API keys)
 
-`DEMO_MODE=1` runs all three tools with no Groq key and no network calls at runtime. Two things are swapped out: the SCF data is replaced by a small synthetic catalog (19 made-up controls with IDs such as `DCRY-01`), and the language model is replaced by a canned stand-in that picks the top retrieved candidates. Everything else runs for real on that data: retrieval ranking, validation, enrichment from the catalog, batch deduplication and ranking, the gap analysis, and the CSV and OSCAL exports. Every page shows a **DEMO MODE** badge, and every export is stamped as demo data.
+`DEMO_MODE=1` runs all three tools with no Groq key and without calling Groq, Hugging Face or the SCF download (Streamlit's own usage statistics are also turned off, in `.streamlit/config.toml`). Two things are swapped out: the SCF data is replaced by a small synthetic catalog (19 made-up controls with IDs such as `DCRY-01`), and the language model is replaced by a canned stand-in that picks the top retrieved candidates. Everything else runs for real on that data: retrieval ranking, validation, enrichment from the catalog, batch deduplication and ranking, the gap analysis, and the CSV and OSCAL exports. Every page shows a **DEMO MODE** badge, and every export is stamped as demo data.
 
 **With Docker Compose** (serves on http://127.0.0.1:8501)
 
@@ -36,7 +36,7 @@ DEMO_MODE=1 uv run streamlit run app.py
 
 Then pick a tool and a **Lab Data** sample: `sample_endpoint_policy.txt` or `aws_securityhub_finding.json` in the Crosswalker, `demo_existing_controls.csv` in the Gap Analyzer, `sample_audit_scope.txt` in the Scope Analyzer.
 
-What the demo does **not** show: how good the real suggestions are. The catalog is not the SCF, the embedder is a hashed bag of words rather than `all-MiniLM-L6-v2`, and the canned model makes no judgment. It always returns the top three candidates with fixed confidences (82, 64, 47), plus `AC-2`, a NIST SP 800-53 ID, on purpose, so you can see validation reject an ID that was not among the candidates. See [ADR-010](DECISIONS.md#adr-010-a-demo-mode-with-a-synthetic-catalog-and-a-canned-model). Demo mode is refused when `ENVIRONMENT` is `production` or `staging`.
+What the demo does **not** show: how good the real suggestions are. The catalog is not the SCF, the embedder is a hashed bag of words rather than `all-MiniLM-L6-v2`, and the canned model makes no judgment. For the Crosswalker it always returns the top three candidates with fixed confidences (82, 64, 47), and for a scope the top six; both also return `AC-2`, a NIST SP 800-53 ID, on purpose, so you can see validation reject an ID that was not among the candidates. See [ADR-010](DECISIONS.md#adr-010-a-demo-mode-with-a-synthetic-catalog-and-a-canned-model). Demo mode is refused when `ENVIRONMENT` is `production` or `staging`.
 
 ---
 

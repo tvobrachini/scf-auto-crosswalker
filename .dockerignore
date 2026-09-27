@@ -18,3 +18,5 @@ data/
 # lab_data/ is kept: the UI's "test with Lab Data" pickers read it.
 lab_data/sample_outputs/
 tests/
+# Screenshots and docs are not needed in the image.
+docs/

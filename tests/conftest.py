@@ -12,6 +12,18 @@ SRC = os.path.join(os.path.dirname(os.path.dirname(__file__)), "src")
 if SRC not in sys.path:
     sys.path.insert(0, SRC)
 
+
+@pytest.fixture(autouse=True)
+def _real_mode_by_default(monkeypatch):
+    """
+    Run every test in real (non-demo) mode unless it opts in.
+
+    An empty DEMO_MODE (rather than an unset one) also stops app.py's
+    load_dotenv() from re-reading DEMO_MODE=1 out of a developer's .env.
+    """
+    monkeypatch.setenv("DEMO_MODE", "")
+
+
 SCF_SAMPLE = [
     {
         "control_id": "CRY-01",

@@ -45,6 +45,5 @@ EXPOSE 8501
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
     CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8501/_stcore/health')"
 
-# No file watcher in the container: there is nothing to hot-reload, and the
-# watcher walks every imported module (including transformers' lazy ones).
-CMD ["streamlit", "run", "app.py", "--server.port=8501", "--server.address=0.0.0.0", "--server.fileWatcherType=none"]
+# Usage statistics and the file watcher are turned off in .streamlit/config.toml.
+CMD ["streamlit", "run", "app.py", "--server.port=8501", "--server.address=0.0.0.0"]

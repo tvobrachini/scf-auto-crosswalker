@@ -174,3 +174,20 @@ def test_run_eval_cli_end_to_end(monkeypatch, tmp_path, fake_embeddings):
     assert "Hit rate @50 | 100.0%" in results  # 4 controls, all retrieved at k=50
 
     assert run_eval.main(["--controls", str(controls), "--column", "Typo"]) == 1
+
+
+def test_run_eval_refuses_demo_mode(monkeypatch, tmp_path):
+    import importlib.util
+    import os
+
+    spec = importlib.util.spec_from_file_location(
+        "run_eval_demo",
+        os.path.join(
+            os.path.dirname(os.path.dirname(__file__)), "scripts", "run_eval.py"
+        ),
+    )
+    run_eval = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(run_eval)
+    monkeypatch.setenv("DEMO_MODE", "1")
+    monkeypatch.delenv("ENVIRONMENT", raising=False)
+    assert run_eval.main(["--gold", str(tmp_path / "gold.csv")]) == 1
