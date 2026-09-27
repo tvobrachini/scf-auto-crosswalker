@@ -19,6 +19,11 @@ Build the Security Hub -> NIST 800-53 -> SCF gold set and score the pipeline.
     # 3. Also score the model step (one Groq call per case)
     uv run python scripts/run_eval.py --gold eval/gold.csv --llm
 
+    # 3b. Same, on an OpenRouter model instead of Groq (needs
+    #     OPENROUTER_API_KEY; langchain-openai is not a project dependency)
+    uv run --with langchain-openai python scripts/run_eval.py \
+        --gold eval/gold.csv --llm --openrouter-model <model id>
+
 Needs the SCF database in data/ and, without --onnx-model, network access to
 Hugging Face for the embedding model. Writes eval/results.md and
 eval/per_case_retrieval.csv (IDs and numbers only); eval/gold.csv holds AWS
@@ -89,6 +94,67 @@ def use_onnx_model(model_dir: str, allow_unverified: bool = False) -> str:
     return f"all-MiniLM-L6-v2, ONNX export (model.onnx sha256 {digest})"
 
 
+def use_openrouter_model(model_name: str, api_key: str):
+    """
+    Swap the model step for `model_name` on OpenRouter (an OpenAI-compatible
+    API) instead of Groq. Returns (label, suggest) for the report and for
+    score_model.
+
+    mapper._invoke_chain's own retry only matches Groq's exception classes,
+    so an OpenRouter rate limit or timeout would otherwise raise immediately;
+    `suggest` carries its own retry over the OpenAI SDK's transient errors
+    instead of changing that decorator. Needs langchain-openai, not a project
+    dependency: `uv run --with langchain-openai`, imported dynamically here
+    so it need not resolve for everyone else (as src/onnx_encoder.py does
+    for onnxruntime).
+    """
+    import importlib
+
+    from tenacity import (
+        retry,
+        retry_if_exception_type,
+        stop_after_attempt,
+        wait_exponential,
+    )
+
+    ChatOpenAI = importlib.import_module("langchain_openai").ChatOpenAI
+    openai = importlib.import_module("openai")
+
+    def get_llm():
+        return ChatOpenAI(
+            model=model_name,
+            api_key=api_key,
+            base_url="https://openrouter.ai/api/v1",
+            temperature=0,
+            max_retries=0,
+            default_headers={
+                "HTTP-Referer": "https://github.com/tvobrachini/scf-auto-crosswalker",
+                "X-Title": "SCF Auto-Crosswalker eval",
+            },
+        )
+
+    mapper._get_llm = get_llm
+
+    @retry(
+        wait=wait_exponential(multiplier=1, min=2, max=60),
+        stop=stop_after_attempt(mapper.MAX_ATTEMPTS),
+        retry=retry_if_exception_type(
+            (
+                openai.RateLimitError,
+                openai.APIConnectionError,
+                openai.APITimeoutError,
+                openai.InternalServerError,
+            )
+        ),
+        reraise=True,
+    )
+    def suggest(text: str) -> list[str]:
+        result = map_text_to_scf(text, top_k=3)
+        return [m.control_id for m in result.mappings] if result else []
+
+    return f"{model_name} (OpenRouter)", suggest
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     source = parser.add_mutually_exclusive_group(required=True)
@@ -104,6 +170,11 @@ def main(argv: list[str] | None = None) -> int:
         "--allow-unverified-onnx",
         action="store_true",
         help="score a model.onnx whose hash is not the pinned one",
+    )
+    parser.add_argument(
+        "--openrouter-model",
+        help="score the model step on this OpenRouter model instead of Groq "
+        "(needs OPENROUTER_API_KEY)",
     )
     args = parser.parse_args(argv)
 
@@ -166,7 +237,14 @@ def main(argv: list[str] | None = None) -> int:
     model = None
     llm_name = None
     if args.llm:
-        if not os.environ.get("GROQ_API_KEY"):
+        suggest = None
+        if args.openrouter_model:
+            api_key = os.environ.get("OPENROUTER_API_KEY")
+            if not api_key:
+                print("OPENROUTER_API_KEY is not set; skipping the model step.")
+            else:
+                llm_name, suggest = use_openrouter_model(args.openrouter_model, api_key)
+        elif not os.environ.get("GROQ_API_KEY"):
             print("GROQ_API_KEY is not set; skipping the model step.")
         else:
             llm_name = os.environ.get("GROQ_MODEL", DEFAULT_GROQ_MODEL)
@@ -175,6 +253,7 @@ def main(argv: list[str] | None = None) -> int:
                 result = map_text_to_scf(text, top_k=3)
                 return [m.control_id for m in result.mappings] if result else []
 
+        if suggest is not None:
             model = score_model(cases, suggest)
 
     table = results_markdown(retrieval, model, read_scf_release(), column, llm_name)
