@@ -1,7 +1,7 @@
 # Case Study: Control mapping an auditor can check
 
 **Role:** Personal project, not affiliated with any employer
-**Stack:** Python, Streamlit, sentence-transformers, LangChain with Groq (Llama 3.1 8B by default), Pydantic, pytest, GitHub Actions
+**Stack:** Python, Streamlit, sentence-transformers, LangChain with OpenRouter (Llama 3.1 8B by default), Pydantic, pytest, GitHub Actions
 **Framework:** Secure Controls Framework (SCF). Its published crosswalk links each control onward to SOC 2, ISO 27001, NIST CSF, NIST SP 800-53, PCI DSS, GDPR, HIPAA and CCPA.
 
 ---
@@ -29,7 +29,7 @@ A third tool, the Gap Analyzer, uses no model at all. It takes an existing contr
 - **Claims are scoped to what the tool can know.** A control in the gap report is *listed*, not *covered*: the tool sees an ID in a spreadsheet, not a control operating. Confidence is labeled as the model's own, uncalibrated number. The OSCAL export records every map as `intersects-with`, the weakest positive relationship in NIST IR 8477, because the tool does not establish subset, superset or equality.
 - **Gaps are counted the way an assessor counts them.** The first version counted SCF controls: 405 of the 407 mapped to SOC 2 were "not listed" for the sample list. An assessor works from the 61 criteria SCF cites, so the report now leads with those (8 have a listed control for the mapped sample) and treats a criterion with a listed control as a place to start testing, not as met.
 - **Framework data is handled under its license.** The SCF is licensed CC BY-ND 4.0, which does not allow redistributing modified copies, so the repository does not host SCF data. The app downloads the official release and derives its working copy locally.
-- **Data leaving the machine is disclosed.** Submitted text goes to Groq's API; the UI says so next to the submit button, and Security Hub findings are reduced to their descriptive fields before anything is sent.
+- **Data leaving the machine is disclosed.** Submitted text goes to OpenRouter's API; the UI says so next to the submit button, and Security Hub findings are reduced to their descriptive fields before anything is sent.
 
 ## Measuring it
 
@@ -41,7 +41,7 @@ The result is modest. At k = 50, the shortlist the model sees, 62% of cases incl
 
 ## Limitations
 
-- Only retrieval has been evaluated. The model step has not been run against a Groq model, so there is no precision figure. The retrieval numbers rest on transitive labels, a March 2023 snapshot of the AWS docs and an ONNX export of the embedding model, not the PyTorch model the app loads.
+- Only retrieval has been evaluated. The model step has not been run against a OpenRouter model, so there is no precision figure. The retrieval numbers rest on transitive labels, a March 2023 snapshot of the AWS docs and an ONNX export of the embedding model, not the PyTorch model the app loads.
 - Validation guarantees that a suggested control exists and was among the candidates, not that it fits the input. That judgment stays with the reviewer.
 - Retrieval bounds the answer: a control the embedding search misses cannot be suggested.
 - The sample outputs in `lab_data/` come from an earlier version and show the failure modes described above; `lab_data/README.md` annotates them.

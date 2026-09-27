@@ -40,21 +40,21 @@ def render_sidebar() -> str:
         if demo:
             # No key, no download: the SCF data and the model are stand-ins,
             # and the download button is not offered.
-            st.write("**Groq API Key:** ⚪ Not used in demo mode")
+            st.write("**OpenRouter API Key:** ⚪ Not used in demo mode")
             st.write(
                 f"**Control catalog:** 🧪 Synthetic demo catalog ({len(DEMO_CATALOG)} controls)"
             )
             st.markdown("---")
             st.info(
                 "DEMO_MODE is on. The catalog is synthetic and is not the Secure "
-                "Controls Framework. Unset DEMO_MODE to use the real SCF data and Groq."
+                "Controls Framework. Unset DEMO_MODE to use the real SCF data and OpenRouter."
             )
             return app_mode
 
         api_key_status = (
-            "🟢 Set" if os.environ.get("GROQ_API_KEY") else "🔴 Missing in .env"
+            "🟢 Set" if os.environ.get("OPENROUTER_API_KEY") else "🔴 Missing in .env"
         )
-        st.write(f"**Groq API Key:** {api_key_status}")
+        st.write(f"**OpenRouter API Key:** {api_key_status}")
 
         if os.path.exists(PARSED_JSON_FILE):
             release = read_scf_release()

@@ -27,7 +27,7 @@ git clone https://github.com/awsdocs/aws-security-hub-user-guide.git awsdocs
 git -C awsdocs checkout 47bfe2f1de2e486914543113d2e751f3e2ed8868
 uv run python scripts/import_awsdocs_controls.py --repo awsdocs   # -> data/awsdocs_controls.json
 
-# 2. Build eval/gold.csv and score retrieval. No Groq key needed.
+# 2. Build eval/gold.csv and score retrieval. No OpenRouter key needed.
 uv run python scripts/run_eval.py --controls data/awsdocs_controls.json
 
 # 2b. Same, with the ONNX export of all-MiniLM-L6-v2 instead of Hugging Face.
@@ -39,10 +39,10 @@ tar xzf onnx.tar.gz   # -> onnx/model.onnx, onnx/tokenizer.json
 uv run --with onnxruntime python scripts/run_eval.py \
     --controls data/awsdocs_controls.json --onnx-model onnx
 
-# 3. Score the model step too: one Groq call per case.
+# 3. Score the model step too: one OpenRouter call per case.
 uv run python scripts/run_eval.py --gold eval/gold.csv --llm
 
-# 3b. Or on an OpenRouter model instead of Groq (needs OPENROUTER_API_KEY;
+# 3b. Or on an OpenRouter model instead of OpenRouter (needs OPENROUTER_API_KEY;
 #     langchain-openai is not a project dependency, only used for this).
 uv run --with langchain-openai python scripts/run_eval.py \
     --gold eval/gold.csv --llm --openrouter-model <model id>
@@ -62,13 +62,13 @@ The report is written to `eval/results.md` and the per-case ranks to `eval/per_c
 | Model | Precision of suggestions | Share of the controls the pipeline suggested (up to 3 per case) that are gold. |
 | Model | Hit rate | Share of cases with at least one gold suggestion. |
 | Model | Cases with no suggestion | Cases where the pipeline suggested nothing: the model returned no IDs, or every ID it returned was rejected. |
-| Model | Cases where the call failed | Cases where the Groq call failed after retries. They are skipped, not retried, and count as misses in the hit rate. |
+| Model | Cases where the call failed | Cases where the OpenRouter call failed after retries. They are skipped, not retried, and count as misses in the hit rate. |
 
 ## Results
 
 ### Retrieval, 2026-09-27
 
-Only the retrieval step has been scored. The model step has not been run: there was no Groq API key for this run, so there are no precision or model hit-rate figures yet.
+Only the retrieval step has been scored. The model step has not been run: there was no OpenRouter API key for this run, so there are no precision or model hit-rate figures yet.
 
 **Inputs and provenance**
 
@@ -135,7 +135,7 @@ The generated report is [`results.md`](results.md); per-case ranks (control ID, 
 **What they do not show**
 
 - **Whether a suggestion is right.** The labels are transitive. A "miss" can be an SCF control that fits the finding but that SCF did not map to the same 800-53 requirement; 815 of the 1,591 SCF controls have no 800-53 entry at all and can never count as a hit. A "hit" can be a loose fit that happens to share a broad requirement.
-- **The model step.** No Groq key was available, so the precision of the pipeline's suggestions is unmeasured.
+- **The model step.** No OpenRouter key was available, so the precision of the pipeline's suggestions is unmeasured.
 - **Today's Security Hub.** The control list and texts are the user guide as of March 2023. AWS has since added and renamed controls and changed mappings. The description is the guide's first paragraph, an approximation of the API's `Description` field.
 - **The exact production model.** The app runs the PyTorch model through sentence-transformers. This run used an ONNX export whose hash matches the one chromadb pins and which matches a second, independent export exactly, but it was not compared with the PyTorch model itself (Hugging Face was not reachable).
 - **Other inputs.** The inputs are short Security Hub control titles and descriptions, not live findings, policy text or scope documents.

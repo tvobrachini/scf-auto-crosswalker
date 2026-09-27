@@ -1,4 +1,4 @@
-"""Shared fakes. Nothing here touches the network, Hugging Face or Groq."""
+"""Shared fakes. Nothing here touches the network, Hugging Face or OpenRouter."""
 
 import os
 import sys

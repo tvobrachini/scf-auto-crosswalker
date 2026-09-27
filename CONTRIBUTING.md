@@ -10,7 +10,7 @@ uv run pre-commit install     # detect-secrets, ruff, ruff-format, bandit
 DEMO_MODE=1 uv run streamlit run app.py   # no keys or downloads needed
 ```
 
-The real tools need a Groq key in `.env` (see `.env.example`) and the SCF download from the sidebar.
+The real tools need a OpenRouter key in `.env` (see `.env.example`) and the SCF download from the sidebar.
 
 ## Before opening a pull request
 
@@ -23,7 +23,7 @@ uv run pyright src/
 uv run pytest tests/ --cov=src --cov-fail-under=85   # offline
 ```
 
-Tests must not call Groq, Hugging Face or the SCF download; use the fakes in `tests/conftest.py` (see ADR-007 in [DECISIONS.md](DECISIONS.md)).
+Tests must not call OpenRouter, Hugging Face or the SCF download; use the fakes in `tests/conftest.py` (see ADR-007 in [DECISIONS.md](DECISIONS.md)).
 
 ## Ground rules
 

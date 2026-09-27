@@ -234,7 +234,7 @@ def test_run_eval_cli_end_to_end(monkeypatch, tmp_path, fake_embeddings):
 
 
 def test_run_eval_cli_openrouter_model(monkeypatch, tmp_path):
-    """--llm --openrouter-model scores via use_openrouter_model, not Groq."""
+    """--llm --openrouter-model scores via use_openrouter_model, not the default."""
     import importlib.util
     import os
 
@@ -255,7 +255,7 @@ def test_run_eval_cli_openrouter_model(monkeypatch, tmp_path):
     spec.loader.exec_module(run_eval)
     monkeypatch.setattr(run_eval, "load_scf_database", lambda: scf)
     monkeypatch.setattr(run_eval, "EVAL_DIR", str(tmp_path))
-    monkeypatch.delenv("GROQ_API_KEY", raising=False)
+    monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
 
     gold = tmp_path / "gold.csv"
     write_gold_csv(

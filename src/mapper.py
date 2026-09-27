@@ -5,11 +5,11 @@ import math
 import os
 import tempfile
 
-import groq
+import openai
 import numpy as np
 import streamlit as st
 from dotenv import load_dotenv
-from langchain_groq import ChatGroq
+from langchain_openai import ChatOpenAI
 from langchain_core.prompts import ChatPromptTemplate
 from pydantic import BaseModel, Field, field_validator
 from sentence_transformers import SentenceTransformer
@@ -27,7 +27,7 @@ from tenacity import (
     wait_exponential,
 )
 
-# Load environment variables (like GROQ_API_KEY)
+# Load environment variables (like OPENROUTER_API_KEY)
 load_dotenv()
 
 logger = logging.getLogger(__name__)
@@ -49,7 +49,7 @@ CROSSWALK_CANDIDATES = 50
 SCOPE_CANDIDATES = 60
 SCOPE_MAX_CONTROLS = 10
 
-DEFAULT_GROQ_MODEL = "llama-3.1-8b-instant"
+DEFAULT_OPENROUTER_MODEL = "meta-llama/llama-3.1-8b-instruct"
 
 
 def _to_percent(value: float) -> int:
@@ -401,10 +401,10 @@ def construct_scf_context(scf_data):
 # Errors worth retrying. Authentication, bad-request and schema errors fail
 # the same way every time, so they are raised immediately.
 _TRANSIENT_ERRORS = (
-    groq.RateLimitError,
-    groq.APIConnectionError,
-    groq.APITimeoutError,
-    groq.InternalServerError,
+    openai.RateLimitError,
+    openai.APIConnectionError,
+    openai.APITimeoutError,
+    openai.InternalServerError,
 )
 
 MAX_ATTEMPTS = 3
@@ -421,16 +421,18 @@ def _invoke_chain(chain, inputs: dict):
     return chain.invoke(inputs)
 
 
-def _get_llm() -> ChatGroq | CannedChatModel:
+def _get_llm() -> ChatOpenAI | CannedChatModel:
     # In DEMO_MODE, a canned stand-in with the same structured-output
-    # interface; nothing is sent to Groq (see src/demo.py).
+    # interface; nothing is sent to the LLM (see src/demo.py).
     if demo_mode_enabled():
         return CannedChatModel()
-    # The Groq client's own retries are turned off so that _invoke_chain is
+    # The client's own retries are turned off so that _invoke_chain is
     # the only retry layer: at most MAX_ATTEMPTS calls per input.
-    return ChatGroq(
+    return ChatOpenAI(
         temperature=0,
-        model_name=os.environ.get("GROQ_MODEL", DEFAULT_GROQ_MODEL),
+        model_name=os.environ.get("OPENROUTER_MODEL", DEFAULT_OPENROUTER_MODEL),
+        openai_api_key=os.environ.get("OPENROUTER_API_KEY"),
+        openai_api_base="https://openrouter.ai/api/v1",
         max_retries=0,
     )
 
@@ -469,7 +471,7 @@ def map_text_to_scf(input_text: str, top_k: int = 3) -> MappingResult | None:
 
     candidates = _semantic_filter(input_text, scf_data, top_k=CROSSWALK_CANDIDATES)
 
-    logger.info("Sending mapping request to Groq...")
+    logger.info("Sending mapping request to OpenRouter...")
     llm_result = _invoke_chain(
         chain,
         {
@@ -620,5 +622,5 @@ if __name__ == "__main__":
                         ", ".join(list(mapping.regulations)[:6]),
                     )
     except Exception as e:
-        logger.error("Error running Groq mapping: %s", e)
-        logger.error("Ensure you have set your GROQ_API_KEY environment variable.")
+        logger.error("Error running OpenRouter mapping: %s", e)
+        logger.error("Ensure you have set your OPENROUTER_API_KEY environment variable.")

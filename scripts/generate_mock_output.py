@@ -1,7 +1,7 @@
 """
 Regenerate the sample outputs in lab_data/sample_outputs/ from the lab inputs.
 
-Needs GROQ_API_KEY, network access to Hugging Face (embedding model) and the
+Needs OPENROUTER_API_KEY, network access to Hugging Face (embedding model) and the
 SCF database in data/ (use the app's sidebar or `python src/fetch_scf.py`).
 The outputs are raw model suggestions, not reviewed mappings.
 """
@@ -85,11 +85,11 @@ def run_scope_analysis():
 if __name__ == "__main__":
     if demo_mode_enabled():
         # Sample outputs document real runs; demo output must not land there.
-        print("[-] DEMO_MODE is on; sample outputs need the real SCF data and Groq.")
+        print("[-] DEMO_MODE is on; sample outputs need the real SCF data and OpenRouter.")
         sys.exit(1)
     os.makedirs(OUT_DIR, exist_ok=True)
-    if not os.environ.get("GROQ_API_KEY"):
-        print("[-] GROQ_API_KEY is not set. The LLM calls would fail.")
+    if not os.environ.get("OPENROUTER_API_KEY"):
+        print("[-] OPENROUTER_API_KEY is not set. The LLM calls would fail.")
         sys.exit(1)
 
     print("[*] Generating lab data outputs...")

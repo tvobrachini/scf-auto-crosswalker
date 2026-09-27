@@ -8,7 +8,7 @@ Build the Security Hub -> NIST 800-53 -> SCF gold set and score the pipeline.
     #    or from the public user guide sources (see import_awsdocs_controls.py)
     uv run python scripts/import_awsdocs_controls.py --repo <clone>
 
-    # 2. Build the gold set and score retrieval (no Groq key needed)
+    # 2. Build the gold set and score retrieval (no OpenRouter key needed)
     uv run python scripts/run_eval.py --controls data/awsdocs_controls.json
 
     # 2b. Same, with the ONNX export of the embedding model instead of the
@@ -16,10 +16,10 @@ Build the Security Hub -> NIST 800-53 -> SCF gold set and score the pipeline.
     uv run --with onnxruntime python scripts/run_eval.py \
         --controls data/awsdocs_controls.json --onnx-model <extracted onnx dir>
 
-    # 3. Also score the model step (one Groq call per case)
+    # 3. Also score the model step (one OpenRouter call per case)
     uv run python scripts/run_eval.py --gold eval/gold.csv --llm
 
-    # 3b. Same, on an OpenRouter model instead of Groq (needs
+    # 3b. Same, on an OpenRouter model instead of OpenRouter (needs
     #     OPENROUTER_API_KEY; langchain-openai is not a project dependency)
     uv run --with langchain-openai python scripts/run_eval.py \
         --gold eval/gold.csv --llm --openrouter-model <model id>
@@ -58,7 +58,7 @@ from fetch_scf import read_scf_release  # noqa: E402
 import mapper  # noqa: E402
 from mapper import (  # noqa: E402
     CROSSWALK_CANDIDATES,
-    DEFAULT_GROQ_MODEL,
+    DEFAULT_OPENROUTER_MODEL,
     _control_texts,
     _semantic_filter,
     load_scf_database,
@@ -97,10 +97,10 @@ def use_onnx_model(model_dir: str, allow_unverified: bool = False) -> str:
 def use_openrouter_model(model_name: str, api_key: str):
     """
     Swap the model step for `model_name` on OpenRouter (an OpenAI-compatible
-    API) instead of Groq. Returns (label, suggest) for the report and for
+    API) instead of OpenRouter. Returns (label, suggest) for the report and for
     score_model.
 
-    mapper._invoke_chain's own retry only matches Groq's exception classes,
+    mapper._invoke_chain's own retry only matches OpenRouter's exception classes,
     so an OpenRouter rate limit or timeout would otherwise raise immediately;
     `suggest` carries its own retry over the OpenAI SDK's transient errors
     instead of changing that decorator. Needs langchain-openai, not a project
@@ -173,7 +173,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument(
         "--openrouter-model",
-        help="score the model step on this OpenRouter model instead of Groq "
+        help="score the model step on this OpenRouter model instead of OpenRouter "
         "(needs OPENROUTER_API_KEY)",
     )
     args = parser.parse_args(argv)
@@ -244,10 +244,10 @@ def main(argv: list[str] | None = None) -> int:
                 print("OPENROUTER_API_KEY is not set; skipping the model step.")
             else:
                 llm_name, suggest = use_openrouter_model(args.openrouter_model, api_key)
-        elif not os.environ.get("GROQ_API_KEY"):
-            print("GROQ_API_KEY is not set; skipping the model step.")
+        elif not os.environ.get("OPENROUTER_API_KEY"):
+            print("OPENROUTER_API_KEY is not set; skipping the model step.")
         else:
-            llm_name = os.environ.get("GROQ_MODEL", DEFAULT_GROQ_MODEL)
+            llm_name = os.environ.get("OPENROUTER_MODEL", DEFAULT_OPENROUTER_MODEL)
 
             def suggest(text: str) -> list[str]:
                 result = map_text_to_scf(text, top_k=3)

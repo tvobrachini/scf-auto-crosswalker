@@ -21,7 +21,7 @@ Design notes: [CASE_STUDY.md](CASE_STUDY.md) (the problem, from the auditor's si
 
 ## Try it in 2 minutes (no API keys)
 
-`DEMO_MODE=1` runs all three tools with no Groq key and without calling Groq, Hugging Face or the SCF download (Streamlit's own usage statistics are also turned off, in `.streamlit/config.toml`). Two things are swapped out: the SCF data is replaced by a small synthetic catalog (19 made-up controls with IDs such as `DCRY-01`), and the language model is replaced by a canned stand-in that picks the top retrieved candidates. Everything else runs for real on that data: retrieval ranking, validation, enrichment from the catalog, batch deduplication and ranking, the gap analysis, and the CSV and OSCAL exports. Every page shows a **DEMO MODE** badge, and every export is stamped as demo data.
+`DEMO_MODE=1` runs all three tools with no OpenRouter key and without calling OpenRouter, Hugging Face or the SCF download (Streamlit's own usage statistics are also turned off, in `.streamlit/config.toml`). Two things are swapped out: the SCF data is replaced by a small synthetic catalog (19 made-up controls with IDs such as `DCRY-01`), and the language model is replaced by a canned stand-in that picks the top retrieved candidates. Everything else runs for real on that data: retrieval ranking, validation, enrichment from the catalog, batch deduplication and ranking, the gap analysis, and the CSV and OSCAL exports. Every page shows a **DEMO MODE** badge, and every export is stamped as demo data.
 
 **With Docker Compose** (serves on http://127.0.0.1:8501)
 
@@ -85,13 +85,13 @@ Audit Scope Analyzer on the lab scope: suggested domains and controls to test, t
 </tr>
 </table>
 
-**And on real data.** The Gap Analyzer needs no language model, so it can run against the real SCF release without a Groq key. This is SCF 2026.3 (1,591 controls, from the official SCF repository) against the SOC 2 column, for `lab_data/sample_controls_with_scf_mapping.csv`, a control list with its own numbering and a column mapping each control to SCF IDs:
+**And on real data.** The Gap Analyzer needs no language model, so it can run against the real SCF release without a OpenRouter key. This is SCF 2026.3 (1,591 controls, from the official SCF repository) against the SOC 2 column, for `lab_data/sample_controls_with_scf_mapping.csv`, a control list with its own numbering and a column mapping each control to SCF IDs:
 
 ![Gap Analyzer on the real SCF 2026.3 release: 8 of 61 SOC 2 criteria have a listed control; 6 of 407 mapped SCF controls are listed](docs/screenshots/gap-analyzer-real-scf-2026-3.png)
 
 SCF cites 61 SOC 2 criteria across all five categories (33 of them in Security, the common criteria many SOC 2 reports are scoped to); 8 have at least one SCF control the sample lists as implemented. Counted by SCF control instead, 6 of the 407 mapped controls are listed, which is why the report leads with requirements. The analyzer picked the `SCF Mapping` column because it names the most SCF IDs, and three mapped controls are not counted because their rows are "Partially implemented" or "Planned". Captured with `MODE=real node scripts/capture_screenshots.mjs`. The table shows framework references and SCF control IDs only, no SCF control text. SCF © Secure Controls Framework (securecontrolsframework.com), CC BY-ND 4.0. The SCF data itself is not stored in this repository.
 
-[`lab_data/sample_outputs/`](lab_data/sample_outputs) holds raw outputs from earlier runs with the real SCF and a Groq model, and [`lab_data/README.md`](lab_data/README.md) annotates them. They record the failure modes the current validation was built for: a scope analysis that returned only NIST 800-53 IDs, and control descriptions rewritten by the model.
+[`lab_data/sample_outputs/`](lab_data/sample_outputs) holds raw outputs from earlier runs with the real SCF and a OpenRouter model, and [`lab_data/README.md`](lab_data/README.md) annotates them. They record the failure modes the current validation was built for: a scope analysis that returned only NIST 800-53 IDs, and control descriptions rewritten by the model.
 
 ---
 
@@ -118,10 +118,10 @@ uv run streamlit run app.py
 
 Open http://localhost:8501, click **Download / Update SCF Data** in the sidebar (it fetches the latest SCF release from GitHub into `data/`), pick **📉 Compliance Gap Analyzer**, choose a framework, and select `sample_controls_with_scf_mapping.csv`. `sample_existing_controls.csv` has no mapping column, so it shows the warning for IDs that are not SCF IDs instead.
 
-**Full setup, with the model-backed tools.** Get a free [Groq API key](https://console.groq.com/keys), then:
+**Full setup, with the model-backed tools.** Get a free [OpenRouter API key](https://openrouter.ai/keys), then:
 
 ```bash
-cp .env.example .env           # set GROQ_API_KEY in .env (and leave DEMO_MODE unset)
+cp .env.example .env           # set OPENROUTER_API_KEY in .env (and leave DEMO_MODE unset)
 
 # Option A: Docker Compose (serves on http://127.0.0.1:8501)
 docker compose up --build -d
@@ -141,7 +141,7 @@ graph TD
     A[Input: policy, scope, or Security Hub finding] --> B[Findings: keep title, description, remediation, resource types]
     B --> C[Embed input in 150-word chunks, all-MiniLM-L6-v2]
     C --> D[Cosine similarity vs. cached SCF embeddings: top 50 / 60 candidates]
-    D --> E[One Groq call, structured output: pick from the candidates]
+    D --> E[One OpenRouter call, structured output: pick from the candidates]
     E --> F[Validation: normalize IDs, keep only candidates, drop duplicates, cap at top k]
     F --> G[Enrich from the SCF database: domain, description, crosswalk references]
     G --> H[Streamlit UI, CSV and OSCAL export, for human review]
@@ -154,11 +154,11 @@ graph TD
 2. **Retrieval.** Each control is embedded once. The cache stores a fingerprint of the control texts, so an SCF update rebuilds it automatically; it is written atomically, and a cache that cannot be read is rebuilt rather than failing.
    - The input is embedded in 150-word chunks and each control keeps its best chunk score. Long documents are therefore not cut off at the model's 256-token window.
    - Security Hub findings are first reduced to their title, description, remediation, resource types, severity and compliance status. Otherwise ARNs and timestamps would fill that window.
-3. **One model call.** The candidates go to Groq (`llama-3.1-8b-instant` by default) through LangChain structured output.
+3. **One model call.** The candidates go to OpenRouter (`meta-llama/llama-3.1-8b-instruct` by default) through LangChain structured output.
    - The model returns only control IDs, a confidence score and a one-sentence justification. A fractional confidence (0.85) is read as a percentage.
    - The prompt tells it that the input is data to analyze, not instructions to follow.
 4. **Validation and enrichment.** IDs are normalized (`" cry-01 "` → `CRY-01`). IDs that were not among the candidates, and duplicates, are dropped, and the dropped IDs are shown in the UI. At most top k are kept (3 per input; 10 for a scope). Scope domain names must be SCF domain names. Confidence is clamped to 0–100. Domain, description and crosswalk references are then copied from the database, so no control text on screen is written by the model. Model text that is shown (justifications, reasoning) is Markdown-escaped, and CSV cells that would start a spreadsheet formula are neutralized.
-5. **Retries.** Groq rate limits, timeouts, connection errors and 5xx responses are retried with exponential backoff, at most 3 attempts per input (the Groq client's own retries are turned off). Authentication and bad-request errors fail at once, and a failure on one finding does not stop a batch.
+5. **Retries.** OpenRouter rate limits, timeouts, connection errors and 5xx responses are retried with exponential backoff, at most 3 attempts per input (the OpenRouter client's own retries are turned off). Authentication and bad-request errors fail at once, and a failure on one finding does not stop a batch.
 6. **Batches.** Identical findings (one control failing on many resources) are sent to the model once. Batch results are ranked by Priority Score = SCF relative weight × sum of model confidences / 100 over *distinct* findings. Each hit counts in proportion to the model's confidence (a 10% hit adds a tenth of a 100% hit), and a control failing on many resources counts once. Results stay on screen when you download an export, and are hidden as soon as the inputs change, so an export always matches the input on screen.
 7. **OSCAL export.** Results can be downloaded as an OSCAL 1.2 `mapping-collection` with status `draft`. Security Hub control IDs (e.g. `CloudFront.3`) become `control` sources; pasted text and documents become `statement` sources; SCF controls are the targets. Source and target resources reference back-matter entries that link to the published SCF and Security Hub documents (neither is an OSCAL catalog). Every map is recorded as `intersects-with`, the weakest positive relationship in NIST IR 8477, because the tool does not establish subset, superset or equality. The test suite parses the export with compliance-trestle's OSCAL models.
 
@@ -179,7 +179,7 @@ The Gap Analyzer (`src/gap_analysis.py`) is deterministic, so the same input alw
 |---|---|
 | **SCF:** the control catalog and its crosswalk to other frameworks | Download and parse with atomic writes and forced refresh; a workbook parser that finds the sheet and columns by name; per-record schema validation; refusing to overwrite the database with an empty parse |
 | **sentence-transformers:** the embedding model | Retrieval over the SCF with a fingerprinted on-disk cache; chunked query embedding for long inputs; Security Hub (ASFF) field extraction before embedding |
-| **LangChain + Groq:** prompt templates, the chat model and structured output | Model-facing schemas that ask only for decisions; validation of every returned ID against the candidates; enrichment from the database; rejected-ID reporting; a single retry layer limited to transient errors |
+| **LangChain + OpenRouter:** prompt templates, the chat model and structured output | Model-facing schemas that ask only for decisions; validation of every returned ID against the candidates; enrichment from the database; rejected-ID reporting; a single retry layer limited to transient errors |
 | **Streamlit:** the UI framework | Three tools with deduplicated, confidence-weighted batch ranking, results tied to the inputs that produced them, escaped model output, lab-data pickers, a data-egress notice, and the deterministic gap analysis |
 | **OSCAL, compliance-trestle:** the mapping model and its Python models | An OSCAL mapping-collection export with honest provenance (`automation`, `draft`, `intersects-with`), validated in tests with trestle; formula-safe CSV exports |
 | **AWS and SCF published mappings:** Security Hub → NIST SP 800-53 and SCF → NIST SP 800-53 | An evaluation harness that builds a gold set from the two and scores retrieval and the model step |
@@ -189,7 +189,7 @@ The Gap Analyzer (`src/gap_analysis.py`) is deterministic, so the same input alw
 
 ## Security and data handling
 
-- **Data sent to Groq.** The Crosswalker and the Scope Analyzer send the submitted text to Groq's API, and the UI says so next to the submit button. For Security Hub findings, only the extracted fields (title, description, remediation, resource types, severity, compliance status) are sent; other text and JSON is sent as submitted. The Gap Analyzer sends nothing. In `DEMO_MODE` nothing is sent anywhere.
+- **Data sent to OpenRouter.** The Crosswalker and the Scope Analyzer send the submitted text to OpenRouter's API, and the UI says so next to the submit button. For Security Hub findings, only the extracted fields (title, description, remediation, resource types, severity, compliance status) are sent; other text and JSON is sent as submitted. The Gap Analyzer sends nothing. In `DEMO_MODE` nothing is sent anywhere.
 - **Local only.** The app has no login. Compose publishes it on `127.0.0.1` only, and the container runs as a non-root user.
 - **Model output is untrusted.** Validation guarantees that a control exists, was among the candidates, and that its text is SCF's. It does not guarantee that the control fits the input. That judgment stays with the reviewer. Model text is Markdown-escaped before display, so a prompt-injected document cannot make the page load an external image or link, and exported CSV cells cannot start a spreadsheet formula.
 - **Supply chain.**
@@ -208,9 +208,9 @@ Set these in `.env` (Compose and the app both read it) or in the environment.
 
 | Variable | Purpose |
 |---|---|
-| `GROQ_API_KEY` | Groq API key. Required for the Crosswalker and the Scope Analyzer; not needed for the Gap Analyzer. |
-| `GROQ_MODEL` | Groq model ID. Default `llama-3.1-8b-instant`. A larger model gives better choices at a higher cost and latency. |
-| `DEMO_MODE` | `1`/`true`/`yes`/`on` runs the synthetic demo (see [Try it in 2 minutes](#try-it-in-2-minutes-no-api-keys)): no Groq key, no SCF or Hugging Face download. Off by default. |
+| `OPENROUTER_API_KEY` | OpenRouter API key. Required for the Crosswalker and the Scope Analyzer; not needed for the Gap Analyzer. |
+| `OPENROUTER_MODEL` | OpenRouter model ID. Default `meta-llama/llama-3.1-8b-instruct`. A larger model gives better choices at a higher cost and latency. |
+| `DEMO_MODE` | `1`/`true`/`yes`/`on` runs the synthetic demo (see [Try it in 2 minutes](#try-it-in-2-minutes-no-api-keys)): no OpenRouter key, no SCF or Hugging Face download. Off by default. |
 | `ENVIRONMENT` | When `production` or `staging`, the app refuses to start with `DEMO_MODE` on. |
 
 ---
@@ -224,7 +224,7 @@ uv run pyright src/
 uv run pre-commit run --all-files         # ruff, ruff-format, bandit, detect-secrets, hygiene
 ```
 
-The suite needs no network access and no API keys. A bag-of-words encoder stands in for the embedding model, and a fake chat model stands in for Groq.
+The suite needs no network access and no API keys. A bag-of-words encoder stands in for the embedding model, and a fake chat model stands in for OpenRouter.
 
 | Test file | What it checks |
 |---|---|
@@ -252,7 +252,7 @@ GitHub Actions runs the following on every push and pull request:
 ```bash
 aws securityhub describe-standards-controls --standards-subscription-arn <arn> > data/standards_controls.json
 #   or, with no AWS account: scripts/import_awsdocs_controls.py on the public user guide sources
-uv run python scripts/run_eval.py --controls data/standards_controls.json   # retrieval, no Groq key
+uv run python scripts/run_eval.py --controls data/standards_controls.json   # retrieval, no OpenRouter key
 uv run python scripts/run_eval.py --gold eval/gold.csv --llm                # plus the model step
 ```
 
@@ -266,7 +266,7 @@ It reports retrieval hit rate, mean recall and MRR at k = 1 to 50 (50 is what th
 | 10 | 38.0% | 27.1% | 5.2% |
 | 50 | 62.0% | 46.2% | 22.8% |
 
-At k = 50, 38% of cases have no control among the model's candidates that the published mappings link to the Security Hub control, so retrieval is the pipeline's main bottleneck. The embedding search clearly beats word overlap and chance. The labels are transitive, so the numbers measure consistency with AWS's and SCF's published mappings, not whether a suggestion is right. The model step has not been scored yet; `--llm` does it with a Groq key. [`eval/README.md`](eval/README.md) has the method, provenance, all k, a stricter subset, and the caveats.
+At k = 50, 38% of cases have no control among the model's candidates that the published mappings link to the Security Hub control, so retrieval is the pipeline's main bottleneck. The embedding search clearly beats word overlap and chance. The labels are transitive, so the numbers measure consistency with AWS's and SCF's published mappings, not whether a suggestion is right. The model step has not been scored yet; `--llm` does it with a OpenRouter key. [`eval/README.md`](eval/README.md) has the method, provenance, all k, a stricter subset, and the caveats.
 
 ---
 
@@ -289,7 +289,7 @@ src/
   ui/components/                Sidebar, demo badge and styles
 scripts/run_eval.py             Build the gold set and score the pipeline
 scripts/import_awsdocs_controls.py  Security Hub controls from the public user guide sources
-scripts/generate_mock_output.py Regenerate lab_data/sample_outputs (needs a Groq key)
+scripts/generate_mock_output.py Regenerate lab_data/sample_outputs (needs a OpenRouter key)
 scripts/capture_screenshots.mjs Regenerate docs/screenshots from a DEMO_MODE run (Playwright)
 docs/screenshots/               README screenshots (DEMO_MODE, synthetic catalog)
 eval/                           Evaluation method and results
@@ -302,11 +302,11 @@ DECISIONS.md                    Architecture decision records
 
 ## Limitations and measurement
 
-- **Retrieval results only; the model step is unmeasured.** Retrieval has been scored on SCF 2026.3 (see [Evaluation](#evaluation)): at k = 50, 62% of the 221 Security Hub controls in the gold set have at least one SCF control linked by the published mappings among the candidates, so 38% do not. The model step has not been scored against a Groq model, so no precision figure is claimed. The retrieval run used an ONNX export of the embedding model, verified by hash and against a second export but not against the PyTorch model the app loads, and the AWS user guide as of March 2023. The earlier sample outputs include weak matches and, for the Scope Analyzer, NIST IDs instead of SCF IDs, which validation now rejects.
+- **Retrieval results only; the model step is unmeasured.** Retrieval has been scored on SCF 2026.3 (see [Evaluation](#evaluation)): at k = 50, 62% of the 221 Security Hub controls in the gold set have at least one SCF control linked by the published mappings among the candidates, so 38% do not. The model step has not been scored against a OpenRouter model, so no precision figure is claimed. The retrieval run used an ONNX export of the embedding model, verified by hash and against a second export but not against the PyTorch model the app loads, and the AWS user guide as of March 2023. The earlier sample outputs include weak matches and, for the Scope Analyzer, NIST IDs instead of SCF IDs, which validation now rejects.
 - **Validation proves existence, not fit.** An ID that passes validation is a real SCF control that was among the candidates. Whether it is the right control is the reviewer's call.
 - **Confidence is self-reported** by the model and is not calibrated.
 - **Retrieval bounds the answer.** If the right control is not among the retrieved candidates, the model cannot pick it.
-- **One model call per input, whole input sent.** Very long documents can exceed Groq's context window or rate limits. Only retrieval is chunked, not the model call.
+- **One model call per input, whole input sent.** Very long documents can exceed OpenRouter's context window or rate limits. Only retrieval is chunked, not the model call.
 - **Gap analysis compares IDs only.** "Listed" means the SCF ID appears in your list (with an in-place status, if you use the status filter). It does not check control names, design or operating effectiveness, and the compared column must hold SCF IDs (your own IDs work through a mapping column). Requirements are those SCF cites, and one listed control does not mean a requirement is met.
 - **OSCAL relationships are not asserted.** Every exported map is `intersects-with` with status `draft`; a reviewer has to confirm or refine each one.
 - **Framework references are SCF's.** The frameworks shown for a control come from SCF's published crosswalk, not from this tool.

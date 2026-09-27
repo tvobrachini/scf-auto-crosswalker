@@ -2,7 +2,7 @@ services:
   scf-app:
     build: .
     # Published on localhost only: the app has no login, and anyone who can
-    # reach it can spend the Groq key.
+    # reach it can spend the OpenRouter key.
     ports:
       - "127.0.0.1:8501:8501"
     # Named volumes, not bind mounts: the app runs as the non-root `app` user,
@@ -14,7 +14,7 @@ services:
     env_file:
       - path: .env
         required: false
-    # DEMO_MODE=1 (from the shell or .env) runs the synthetic demo: no Groq
+    # DEMO_MODE=1 (from the shell or .env) runs the synthetic demo: no OpenRouter
     # key, no SCF download and no Hugging Face download.
     environment:
       DEMO_MODE: ${DEMO_MODE:-0}

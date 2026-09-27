@@ -151,7 +151,7 @@ def render(labels: Labels, lab_data_dir: str) -> None:
 
     cw_fingerprint = fingerprint([(i.label, i.text, i.source_id) for i in inputs])
 
-    st.caption(labels.groq_notice)
+    st.caption(labels.llm_notice)
     col1, col2, col3 = st.columns([1, 1, 1])
     if col2.button(
         "🚀 Suggest Controls (demo catalog)"
@@ -167,8 +167,8 @@ def render(labels: Labels, lab_data_dir: str) -> None:
             st.warning(
                 "Please provide some text, select a lab file, or upload a document to proceed."
             )
-        elif not labels.demo_mode and not os.environ.get("GROQ_API_KEY"):
-            st.error("No GROQ_API_KEY found in .env.")
+        elif not labels.demo_mode and not os.environ.get("OPENROUTER_API_KEY"):
+            st.error("No OPENROUTER_API_KEY found in .env.")
         elif not scf_db:
             st.error("SCF database not found or empty. Use the sidebar to download it.")
         else:

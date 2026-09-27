@@ -4,7 +4,7 @@ import streamlit as st
 from demo import DEMO_BADGE
 
 DEMO_DETAIL = (
-    "No Groq call, no Hugging Face download and no SCF download. The control "
+    "No OpenRouter call, no Hugging Face download and no SCF download. The control "
     "catalog (IDs starting with D, such as DCRY-01) is synthetic, not SCF content, "
     "and a canned stand-in picks the top retrieved candidates in place of the "
     "language model, so the suggestions say nothing about real accuracy. "

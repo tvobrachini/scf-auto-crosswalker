@@ -87,7 +87,7 @@ def render(labels: Labels, lab_data_dir: str) -> None:
     scope_fingerprint = fingerprint(scope_text)
 
     st.markdown("---")
-    st.caption(labels.groq_notice)
+    st.caption(labels.llm_notice)
     col1, col2, col3 = st.columns([1, 1, 1])
     if col2.button(
         "🎯 Suggest Controls to Test",
@@ -98,8 +98,8 @@ def render(labels: Labels, lab_data_dir: str) -> None:
         st.session_state.pop("scope_result", None)
         if not scope_text.strip():
             st.warning("Please paste or upload an audit scope document.")
-        elif not labels.demo_mode and not os.environ.get("GROQ_API_KEY"):
-            st.error("No GROQ_API_KEY found in .env.")
+        elif not labels.demo_mode and not os.environ.get("OPENROUTER_API_KEY"):
+            st.error("No OPENROUTER_API_KEY found in .env.")
         else:
             with st.spinner("Retrieving candidate controls and asking the model..."):
                 try:

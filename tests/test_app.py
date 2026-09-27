@@ -83,13 +83,13 @@ EVIL = "![x](https://evil.example/leak.png) [click](https://evil.example)"
 
 @pytest.fixture
 def fake_model(scf_db, monkeypatch, tmp_path):
-    """Fake Groq and embeddings inside the `mapper` module the app imports."""
+    """Fake OpenRouter and embeddings inside the `mapper` module the app imports."""
     import mapper
 
     from tests.conftest import FakeEmbeddingModel
     from tests.test_pipeline import FakeLLM
 
-    monkeypatch.setenv("GROQ_API_KEY", "test-key")
+    monkeypatch.setenv("OPENROUTER_API_KEY", "test-key")
     monkeypatch.setattr(mapper, "_get_embedding_model", lambda: FakeEmbeddingModel())
     monkeypatch.setattr(
         mapper, "EMBEDDINGS_CACHE_FILE", str(tmp_path / "emb" / "scf_embeddings.npz")

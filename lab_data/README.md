@@ -20,6 +20,6 @@ These files are raw, unreviewed output from an 8B model (`llama-3.1-8b-instant`)
 - **`audit_scope_analysis_result.json`**: every recommended control ID (`AC-1`, `IA-2`, `SC-8`, `AU-2`, …) is a NIST SP 800-53 ID, not an SCF ID. The current code checks scope recommendations against the SCF database and would reject all ten.
 - **`aws_finding_mapping_result.csv`** and **`policy_mapping_result.csv`**: the control IDs exist in SCF, but several matches are weak (for example, a laptop-encryption policy mapped to `DCH-05.5`, which is about human-readable security labels). The description column was written by the model, which is why some entries start with a domain prefix; the current code takes descriptions from the SCF database instead. The columns also differ from the app's current CSV export.
 
-To regenerate them with the current code, run `uv run python scripts/generate_mock_output.py` (needs `GROQ_API_KEY`, access to Hugging Face and the SCF data in `data/`), then review the results before committing them.
+To regenerate them with the current code, run `uv run python scripts/generate_mock_output.py` (needs `OPENROUTER_API_KEY`, access to Hugging Face and the SCF data in `data/`), then review the results before committing them.
 
 The CSVs quote short excerpts of SCF control text with attribution. SCF content © Secure Controls Framework, licensed CC BY-ND 4.0.

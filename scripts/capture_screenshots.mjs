@@ -37,7 +37,7 @@ const APP_URL = process.env.APP_URL || "http://localhost:8599";
 const OUT_DIR = process.env.OUT_DIR || "docs/screenshots";
 const CHROMIUM_PATH = process.env.CHROMIUM_PATH || undefined;
 // MODE=real captures the one real-data screenshot instead of the demo set:
-// the Gap Analyzer against a downloaded SCF release (no Groq key needed).
+// the Gap Analyzer against a downloaded SCF release (no OpenRouter key needed).
 // Start the app WITHOUT DEMO_MODE, with the SCF data in data/.
 const REAL = process.env.MODE === "real";
 
