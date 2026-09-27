@@ -12,7 +12,7 @@ This file records the design decisions as the code implements them today. Each r
 
 **Consequences.**
 - One mapping target instead of eight. A finding mapped to an SCF control inherits SCF's published references.
-- Those references are only as good as SCF's crosswalk. The UI labels them "from SCF's crosswalk".
+- Those references are only as good as SCF's crosswalk. The UI labels them "from the SCF crosswalk".
 - `parse_scf` keeps only the columns whose names contain one of the eight framework keywords (compared with spaces and line breaks removed, so "NIST SP 800-53 R5" and "NIST\n800-53\nrev5" both match), so any other framework in the workbook is dropped.
 
 ---
@@ -143,3 +143,25 @@ This file records the design decisions as the code implements them today. Each r
 - The labels are transitive and coarse: one 800-53 requirement often maps to several SCF controls, and "shares an 800-53 requirement" is weaker than a reviewer's judgment. The numbers measure consistency with AWS's and SCF's mappings, not ground-truth accuracy, and the README says so.
 - The inputs are Security Hub control titles and descriptions, so the score says nothing direct about policy text or scope documents.
 - Results are not published yet; `eval/README.md` holds the method and will hold the numbers.
+
+---
+
+## ADR-010: A demo mode with a synthetic catalog and a canned model
+
+**Status:** Accepted
+
+**Context.** Trying the model-backed tools needed a Groq key, a Hugging Face download and the SCF download. SCF data is CC BY-ND 4.0 and is not hosted here (ADR-002), so a demo cannot ship real SCF controls either.
+
+**Decision.** `DEMO_MODE=1` (also `true`, `yes`, `on`) swaps the two external services and the SCF data for local stand-ins, in `src/demo.py`, behind a narrow seam in `src/mapper.py`:
+
+- `load_scf_database()` returns `DEMO_CATALOG`: 19 synthetic controls written for this project, with no SCF text and no SCF IDs. IDs use made-up prefixes that start with `D` (`DCRY-01`, `DIAM-02`) so they pass the `SCFControl` ID check, and domains are named "Demo …". The crosswalk columns name real frameworks (NIST SP 800-53, ISO 27001, SOC 2, PCI DSS, GDPR, …) with illustrative references, which are facts about those frameworks, not SCF content.
+- `_get_embedding_model()` returns a hashed bag-of-words encoder (CRC32 buckets of crudely stemmed words). The demo catalog is embedded directly, so the on-disk embedding cache of the real SCF is never touched.
+- `_get_llm()` returns a canned model with ChatGroq's `with_structured_output(schema)` interface, built on a LangChain `RunnableLambda`. It reads the candidate list from the rendered prompt and returns the top three candidates, in retrieval order, with fixed confidences (82, 64, 47) and justifications that say they are demo output. For a scope, it returns the top six and their domains. It also returns `AC-2`, a NIST SP 800-53 ID, on every call, deliberately, so the demo shows validation rejecting an ID that was not among the candidates.
+
+Everything else is the production code on demo data: the prompts, candidate retrieval and ranking, validation, enrichment, batch deduplication and Priority Score ranking, the gap analysis, and the exports. Demo mode never activates silently: every page and the sidebar carry a "DEMO MODE — synthetic catalog, canned model" badge, the sidebar hides the SCF download button, labels name the synthetic catalog, and exports are stamped (a "Demo Notice" column on every CSV row; `[DEMO DATA]` in the OSCAL title, and a notice in the metadata remarks, the mapping description and the target resource). It is off by default and refused when `ENVIRONMENT` is `production` or `staging`. `scripts/run_eval.py` and `scripts/generate_mock_output.py` refuse to run in demo mode, so demo output can never be recorded as an evaluation result or a sample of real output.
+
+**Consequences.**
+- Anyone can run all three tools in two minutes with no keys, and the screenshots in the README come from a reproducible demo run (`scripts/capture_screenshots.mjs`).
+- Demo output says nothing about the accuracy of the real pipeline. The catalog is not the SCF, the embedder only matches shared words, and the canned model makes no judgment; its picks are whatever the toy retrieval ranks first, which is sometimes a weak match. The evaluation (ADR-009) is the place for accuracy.
+- The embedding cache, the Groq retry behaviour and the SCF download are not exercised in demo mode; the offline tests (ADR-007) cover them.
+- `tests/test_demo.py` runs all three tools in `AppTest` with demo mode on and checks the badge, the rejected ID and the export stamps, so the seam cannot drift silently.

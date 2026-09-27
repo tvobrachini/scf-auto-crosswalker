@@ -1,6 +1,7 @@
 import os
 
 import streamlit as st
+from demo import DEMO_CATALOG, demo_mode_enabled
 from fetch_scf import (
     PARSED_JSON_FILE,
     download_scf,
@@ -9,6 +10,7 @@ from fetch_scf import (
     setup_directories,
 )
 from mapper import clear_scf_cache
+from ui.components.demo_badge import render_demo_badge
 
 TOOLS = [
     "🔍 SCF Auto-Crosswalker",
@@ -19,14 +21,35 @@ TOOLS = [
 
 def render_sidebar() -> str:
     """Render the navigation sidebar and return the selected tool."""
+    demo = demo_mode_enabled()
     with st.sidebar:
-        st.title("🛡️ Secure Controls Framework (SCF)")
+        if demo:
+            render_demo_badge(detail=False)
+        st.title(
+            "🛡️ SCF Auto-Crosswalker (demo)"
+            if demo
+            else "🛡️ Secure Controls Framework (SCF)"
+        )
         st.markdown("### GRC Assistant Platform")
 
         app_mode = st.radio("Select Tool", TOOLS)
 
         st.markdown("---")
         st.header("⚙️ System Status")
+
+        if demo:
+            # No key, no download: the SCF data and the model are stand-ins,
+            # and the download button is not offered.
+            st.write("**Groq API Key:** ⚪ Not used in demo mode")
+            st.write(
+                f"**Control catalog:** 🧪 Synthetic demo catalog ({len(DEMO_CATALOG)} controls)"
+            )
+            st.markdown("---")
+            st.info(
+                "DEMO_MODE is on. The catalog is synthetic and is not the Secure "
+                "Controls Framework. Unset DEMO_MODE to use the real SCF data and Groq."
+            )
+            return app_mode
 
         api_key_status = (
             "🟢 Set" if os.environ.get("GROQ_API_KEY") else "🔴 Missing in .env"
