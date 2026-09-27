@@ -16,6 +16,7 @@
  *
  * Environment overrides:
  *   APP_URL        default http://localhost:8599
+ *   MODE           "real" captures gap-analyzer-real-scf-2026-3.png from a real-data run
  *   OUT_DIR        default docs/screenshots
  *   CHROMIUM_PATH  default: Playwright's bundled Chromium (set it to use an
  *                  installed binary, e.g. /opt/pw-browsers/chromium-1194/chrome-linux/chrome)
@@ -35,6 +36,10 @@ const { chromium } = require("playwright");
 const APP_URL = process.env.APP_URL || "http://localhost:8599";
 const OUT_DIR = process.env.OUT_DIR || "docs/screenshots";
 const CHROMIUM_PATH = process.env.CHROMIUM_PATH || undefined;
+// MODE=real captures the one real-data screenshot instead of the demo set:
+// the Gap Analyzer against a downloaded SCF release (no Groq key needed).
+// Start the app WITHOUT DEMO_MODE, with the SCF data in data/.
+const REAL = process.env.MODE === "real";
 
 async function shot(page, name) {
   await mkdir(OUT_DIR, { recursive: true });
@@ -54,7 +59,7 @@ async function idle(page) {
 
 async function openTool(page, tool) {
   await page.goto(APP_URL, { waitUntil: "networkidle" });
-  await page.getByText("DEMO MODE").first().waitFor();
+  if (!REAL) await page.getByText("DEMO MODE").first().waitFor();
   await page.locator('[data-testid="stSidebar"]').getByText(tool).click();
   await page.getByRole("heading", { name: tool }).waitFor();
   await idle(page);
@@ -83,6 +88,19 @@ async function main() {
     colorScheme: "dark",
   });
   const page = await ctx.newPage();
+
+  if (REAL) {
+    await openTool(page, "📉 Compliance Gap Analyzer");
+    await pick(page, "Or select Lab Data", "sample_existing_controls.csv");
+    await page.getByRole("button", { name: /Run Gap Analysis/ }).click();
+    await page.getByText(/controls mapped/).first().waitFor();
+    await idle(page);
+    await scrollTo(page, page.getByText(/in your list are not SCF control IDs/), -90);
+    await shot(page, "gap-analyzer-real-scf-2026-3");
+    await ctx.close();
+    await browser.close();
+    return;
+  }
 
   // 1. Crosswalker, single input: suggestions and the rejected-ID warning.
   await openTool(page, "🔍 SCF Auto-Crosswalker");

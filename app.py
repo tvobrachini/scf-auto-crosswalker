@@ -658,7 +658,10 @@ elif app_mode == "📉 Compliance Gap Analyzer":
                 col_m2.metric(
                     "✅ Listed in your controls",
                     report.covered,
-                    delta=f"{round(report.covered / len(report.rows) * 100)}%",
+                    # A share, not a change: no arrow, one decimal (2 of 407 is 0.5%, not 0%).
+                    delta=f"{report.covered / len(report.rows) * 100:.1f}% of mapped",
+                    delta_color="off",
+                    delta_arrow="off",
                 )
                 col_m3.metric("❌ Not listed", report.gaps)
                 st.caption(
