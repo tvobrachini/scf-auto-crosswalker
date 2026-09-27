@@ -136,13 +136,16 @@ This file records the design decisions as the code implements them today. Each r
 
 **Status:** Accepted
 
-**Decision.** `src/evaluation.py` and `scripts/run_eval.py` build a gold set from two published mappings: AWS's mapping of each Security Hub control to NIST SP 800-53 rev 5 (`RelatedRequirements` from `describe-standards-controls`), and SCF's crosswalk from its controls to NIST SP 800-53. A Security Hub control's gold SCF controls are the SCF controls that SCF maps to any of its 800-53 requirements. The script reports retrieval hit rate and mean recall at k = 10 and 50, and, with `--llm`, the precision and hit rate of the pipeline's suggestions.
+**Decision.** `src/evaluation.py` and `scripts/run_eval.py` build a gold set from two published mappings: AWS's mapping of each Security Hub control to NIST SP 800-53 rev 5 (`RelatedRequirements` from `describe-standards-controls`), and SCF's crosswalk from its controls to NIST SP 800-53. A Security Hub control's gold SCF controls are the SCF controls that SCF maps to any of its 800-53 requirements. The script reports retrieval hit rate, mean recall and MRR at k = 1, 3, 5, 10, 20 and 50, with a random and a TF-IDF baseline, and, with `--llm`, the precision and hit rate of the pipeline's suggestions.
 
 **Consequences.**
 - Anyone with read-only AWS access and the SCF download can reproduce the numbers; no labeling effort is needed, and the retrieval score needs no API key.
 - The labels are transitive and coarse: one 800-53 requirement often maps to several SCF controls, and "shares an 800-53 requirement" is weaker than a reviewer's judgment. The numbers measure consistency with AWS's and SCF's mappings, not ground-truth accuracy, and the README says so.
 - The inputs are Security Hub control titles and descriptions, so the score says nothing direct about policy text or scope documents.
-- Results are not published yet; `eval/README.md` holds the method and will hold the numbers.
+- The two mappings spell 800-53 IDs differently (SCF 2026.3 zero-pads: `AC-02(01)`; AWS: `AC-2(1)`). The join normalizes both; without it, the first run kept 107 of 221 cases and 334 of 1,866 gold links, and nothing flagged the loss. `tests/test_evaluation.py` pins the normalization.
+- A hit rate is only meaningful next to what chance would score, because gold sets are large (median 7, up to 28 controls). The report therefore includes the exact random-ranking expectation, a TF-IDF baseline over the same control texts, MRR, and the subset of cases with at most 10 gold controls.
+- Where an AWS account or Hugging Face is out of reach, the inputs can come from the archived public AWS user guide sources (`scripts/import_awsdocs_controls.py`, which records the commit) and the embedding model from its ONNX export (`src/onnx_encoder.py`, `--onnx-model`). Both substitutions are documented with the results. onnxruntime is not a project dependency: it is used only for this path, through `uv run --with onnxruntime`, so the app's lockfile and image stay unchanged.
+- First results (2026-09-27, retrieval only, in `eval/README.md`): at k = 50, 62.0% hit rate against 46.2% for TF-IDF and 22.8% for random ranking; 38% of cases have no linked control among the model's candidates. The model step is not yet scored, because no Groq key was available for that run.
 
 ---
 

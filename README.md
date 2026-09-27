@@ -217,7 +217,7 @@ The suite needs no network access and no API keys. A bag-of-words encoder stands
 | `tests/test_fetch_scf.py` | Download, forced re-download, an interrupted download that leaves the previous file intact; parsing a synthetic SCF workbook, framework columns with any spacing, clamped weights, atomic writes, the release record, and an empty parse |
 | `tests/test_crosswalk.py`, `tests/test_exports.py` | Batch deduplication, per-finding errors, confidence-weighted ranking; formula-safe CSV; the OSCAL mapping-collection, including a parse with compliance-trestle's OSCAL models |
 | `tests/test_gap_analysis.py`, `tests/test_findings.py` | Gap matching per crosswalk column, the status filter, ID-column detection, unknown-ID reporting; Security Hub field and control-ID extraction |
-| `tests/test_evaluation.py` | Gold-set construction from Security Hub and SCF mappings, the retrieval and model metrics, and the evaluation CLI end to end |
+| `tests/test_evaluation.py`, `tests/test_onnx_encoder.py` | Gold-set construction from Security Hub and SCF mappings (including zero-padded 800-53 IDs), parsing the user guide's control pages, the retrieval and model metrics, the random baseline against brute force, the TF-IDF baseline, the evaluation CLI end to end; the ONNX encoder's truncation, padding, pooling and normalization with a fake session |
 | `tests/test_app.py` | Headless Streamlit `AppTest` runs of all three tools with a fake model: single and batch crosswalks, escaping of a malicious justification, results surviving a rerun, export buttons, scope analysis and a gap analysis on the lab CSV |
 | `tests/test_demo.py` | `DEMO_MODE`: activation values and the production guard, every catalog record passing the `SCFControl` schema, determinism with no real model loaded, the rejected `AC-2`, stamped CSV and OSCAL exports (validated with trestle), all three tools end to end in `AppTest` with the badge visible, and demo mode off by default |
 | `tests/test_mapper.py`, `tests/test_validate_mapping.py` | Schemas, prompt context formatting and the validator |
@@ -235,12 +235,23 @@ GitHub Actions runs the following on every push and pull request:
 `scripts/run_eval.py` scores the pipeline against a gold set built from two published mappings, with no hand labeling: AWS's mapping of each Security Hub control to NIST SP 800-53 rev 5 (`RelatedRequirements`), and SCF's own crosswalk from its controls to NIST SP 800-53. A Security Hub control's gold SCF controls are those SCF maps to any of its 800-53 requirements.
 
 ```bash
-aws securityhub describe-standards-controls --standards-subscription-arn <arn> > eval/standards_controls.json
-uv run python scripts/run_eval.py --controls eval/standards_controls.json   # retrieval, no Groq key
+aws securityhub describe-standards-controls --standards-subscription-arn <arn> > data/standards_controls.json
+#   or, with no AWS account: scripts/import_awsdocs_controls.py on the public user guide sources
+uv run python scripts/run_eval.py --controls data/standards_controls.json   # retrieval, no Groq key
 uv run python scripts/run_eval.py --gold eval/gold.csv --llm                # plus the model step
 ```
 
-It reports retrieval hit rate and mean recall at k = 10 and 50 (50 is what the model sees), and, with `--llm`, the precision of the model's suggestions. The labels are transitive, so the numbers measure consistency with AWS's and SCF's published mappings, not ground-truth accuracy. [`eval/README.md`](eval/README.md) has the details; results will be published there.
+It reports retrieval hit rate, mean recall and MRR at k = 1 to 50 (50 is what the model sees), next to a random-ranking expectation and a TF-IDF baseline, and, with `--llm`, the precision of the model's suggestions.
+
+**First results (retrieval only, 2026-09-27).** SCF 2026.3, 221 Security Hub controls from the AWS user guide as of March 2023, `all-MiniLM-L6-v2` run from a hash-verified ONNX export:
+
+| k | Embedding hit rate | TF-IDF hit rate | Random (expected) |
+|---:|---:|---:|---:|
+| 1 | 11.3% | 7.2% | 0.5% |
+| 10 | 38.0% | 27.1% | 5.2% |
+| 50 | 62.0% | 46.2% | 22.8% |
+
+At k = 50, 38% of cases have no control among the model's candidates that the published mappings link to the finding, so retrieval is the pipeline's main bottleneck. The embedding search clearly beats word overlap and chance. The labels are transitive, so the numbers measure consistency with AWS's and SCF's published mappings, not whether a suggestion is right. The model step has not been scored (no Groq key was available). [`eval/README.md`](eval/README.md) has the method, provenance, all k, a stricter subset, and the caveats.
 
 ---
 
@@ -256,9 +267,11 @@ src/
   gap_analysis.py               Deterministic gap analysis
   crosswalk.py                  Batch runs, deduplication and ranking
   exports.py                    Formula-safe CSV and OSCAL mapping export
-  evaluation.py                 Gold-set construction and metrics
+  evaluation.py                 Gold-set construction, metrics and baselines
+  onnx_encoder.py               ONNX stand-in for the embedding model (evaluation only)
   ui/components/                Sidebar and styles
 scripts/run_eval.py             Build the gold set and score the pipeline
+scripts/import_awsdocs_controls.py  Security Hub controls from the public user guide sources
 scripts/generate_mock_output.py Regenerate lab_data/sample_outputs (needs a Groq key)
 scripts/capture_screenshots.mjs Regenerate docs/screenshots from a DEMO_MODE run (Playwright)
 docs/screenshots/               README screenshots (DEMO_MODE, synthetic catalog)
@@ -272,7 +285,7 @@ DECISIONS.md                    Architecture decision records
 
 ## Limitations and accuracy
 
-- **No published results yet.** The evaluation harness (see [Evaluation](#evaluation)) is in place but has not been run against the live SCF data and a Groq model, so no precision or recall figures are claimed. The earlier sample outputs include weak matches and, for the Scope Analyzer, NIST IDs instead of SCF IDs, which validation now rejects.
+- **Retrieval results only; the model step is unmeasured.** Retrieval has been scored on SCF 2026.3 (see [Evaluation](#evaluation)): at k = 50, 62% of the 221 Security Hub controls in the gold set have at least one SCF control linked by the published mappings among the candidates, so 38% do not. The model step has not been scored against a Groq model, so no precision figure is claimed. The retrieval run used an ONNX export of the embedding model, verified by hash and against a second export but not against the PyTorch model the app loads, and the AWS user guide as of March 2023. The earlier sample outputs include weak matches and, for the Scope Analyzer, NIST IDs instead of SCF IDs, which validation now rejects.
 - **Validation proves existence, not fit.** An ID that passes validation is a real SCF control that was among the candidates. Whether it is the right control is the reviewer's call.
 - **Confidence is self-reported** by the model and is not calibrated.
 - **Retrieval bounds the answer.** If the right control is not among the retrieved candidates, the model cannot pick it.
