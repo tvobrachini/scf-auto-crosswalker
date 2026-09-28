@@ -41,7 +41,7 @@ The result is modest. At k = 50, the shortlist the model sees, 62% of cases incl
 
 ## Limitations
 
-- Only retrieval has been evaluated. The model step has not been run against a OpenRouter model, so there is no precision figure. The retrieval numbers rest on transitive labels, a March 2023 snapshot of the AWS docs and an ONNX export of the embedding model, not the PyTorch model the app loads.
+- Only retrieval has been evaluated. The model step has not been run against an OpenRouter model, so there is no precision figure. The retrieval numbers rest on transitive labels, a March 2023 snapshot of the AWS docs and an ONNX export of the embedding model, not the PyTorch model the app loads.
 - Validation guarantees that a suggested control exists and was among the candidates, not that it fits the input. That judgment stays with the reviewer.
 - Retrieval bounds the answer: a control the embedding search misses cannot be suggested.
 - The sample outputs in `lab_data/` come from an earlier version and show the failure modes described above; `lab_data/README.md` annotates them.
