@@ -41,7 +41,7 @@ This file records the design decisions as the code implements them today. Each r
 **Decision.** `_semantic_filter` (`src/mapper.py`) embeds the input with `all-MiniLM-L6-v2` and ranks every SCF control by cosine similarity. The Crosswalker sends the top 50 candidates to the LLM and the Scope Analyzer the top 60. The Scope Analyzer also sends the full list of SCF domains with their ID prefixes, so its domain suggestions can cover the whole framework. The retrieval step replaced keyword matching in commit `5ed1f81`.
 
 **Consequences.**
-- The prompt stays small enough for OpenRouter's free-tier limits instead of carrying all 1,591 controls (SCF 2026.3).
+- The prompt stays small enough for free-tier token limits (the original constraint with Groq, ADR-005) instead of carrying all 1,591 controls (SCF 2026.3).
 - The model can only pick a control that retrieval found: validation (ADR-004) accepts only candidate IDs. A retrieval miss is an answer miss, which is why the evaluation (ADR-009) measures retrieval on its own.
 - The embedding model truncates at 256 word pieces. The input is therefore embedded in 150-word chunks, and each control keeps its best chunk score (`_chunk_words`). Security Hub findings are first reduced to their descriptive fields (`src/findings.py`), because roughly the first 700 characters of a raw finding are ARNs, IDs and timestamps.
 - Control embeddings are cached in `data/scf_embeddings.npz` together with a SHA-256 fingerprint of the embedding model name and every control text. A cache whose fingerprint or row count does not match the current database is rebuilt, so row *i* always belongs to control *i*.
@@ -70,19 +70,19 @@ This file records the design decisions as the code implements them today. Each r
 
 ---
 
-## ADR-005: OpenRouter with Llama 3.1 8B by default
+## ADR-005: Groq with Llama 3.1 8B by default
 
-**Status:** Accepted
+**Status:** Superseded by ADR-012. Kept as written at the time: the app now calls OpenRouter, and this record describes the Groq setup it replaced.
 
-**Decision.** `_get_llm` builds `ChatOpenRouter(temperature=0)` with the model from `OPENROUTER_MODEL`, defaulting to `meta-llama/llama-3.1-8b-instruct`. Structured output goes through LangChain's `with_structured_output`.
+**Decision.** `_get_llm` builds `ChatGroq(temperature=0)` with the model from `GROQ_MODEL`, defaulting to `llama-3.1-8b-instant`. Structured output goes through LangChain's `with_structured_output`.
 
 **Consequences.**
 - It is free to try and has low latency, which matters in batch mode, where each finding is a separate call.
-- An 8B model makes weaker choices than larger models; the committed samples include weak matches. Any OpenRouter model can be set through `OPENROUTER_MODEL`.
+- An 8B model makes weaker choices than larger models; the committed samples include weak matches. Any Groq model can be set through `GROQ_MODEL`.
 - Temperature 0 lowers variance but does not make the output deterministic.
-- `_invoke_chain` retries only rate limits, timeouts, connection errors and 5xx responses (at most 3 attempts, exponential backoff). The OpenRouter client's own retries are turned off (`max_retries=0`), so this is the only retry layer. Authentication and bad-request errors fail at once instead of retrying for each finding in a batch.
+- `_invoke_chain` retries only rate limits, timeouts, connection errors and 5xx responses (at most 3 attempts, exponential backoff). The Groq client's own retries are turned off (`max_retries=0`), so this is the only retry layer. Authentication and bad-request errors fail at once instead of retrying for each finding in a batch.
 - In batch mode, identical finding texts are sent once (`src/crosswalk.py`), at most 50 distinct findings are mapped per batch, and an error on one finding is reported on that finding without stopping the batch. The ranking sums model confidences over distinct findings, so a control failing on many resources counts once.
-- The submitted text is sent to OpenRouter. The UI and SECURITY.md say so.
+- The submitted text is sent to Groq. The UI and SECURITY.md say so.
 
 ---
 
@@ -145,7 +145,7 @@ This file records the design decisions as the code implements them today. Each r
 - The two mappings spell 800-53 IDs differently (SCF 2026.3 zero-pads: `AC-02(01)`; AWS: `AC-2(1)`). The join normalizes both; without it, the first run kept 107 of 221 cases and 334 of 1,866 gold links, and nothing flagged the loss. `tests/test_evaluation.py` pins the normalization.
 - A hit rate is only meaningful next to what chance would score, because gold sets are large (median 7, up to 28 controls). The report therefore includes the exact random-ranking expectation, a TF-IDF baseline over the same control texts, MRR, and the subset of cases with at most 10 gold controls.
 - Where an AWS account or Hugging Face is out of reach, the inputs can come from the archived public AWS user guide sources (`scripts/import_awsdocs_controls.py`, which records the commit) and the embedding model from its ONNX export (`src/onnx_encoder.py`, `--onnx-model`). Both substitutions are documented with the results. onnxruntime is not a project dependency: it is used only for this path, through `uv run --with onnxruntime`, so the app's lockfile and image stay unchanged.
-- First results (2026-09-27, retrieval only, in `eval/README.md`): at k = 50, 62.0% hit rate against 46.2% for TF-IDF and 22.8% for random ranking; 38% of cases have no linked control among the model's candidates. The model step is not yet scored; that needs a OpenRouter key (`--llm`).
+- First results (2026-09-27, retrieval only, in `eval/README.md`): at k = 50, 62.0% hit rate against 46.2% for TF-IDF and 22.8% for random ranking; 38% of cases have no linked control among the model's candidates. The model step is not yet scored; that needs an OpenRouter key (`--llm`).
 
 ---
 
@@ -153,20 +153,20 @@ This file records the design decisions as the code implements them today. Each r
 
 **Status:** Accepted
 
-**Context.** Trying the model-backed tools needed a OpenRouter key, a Hugging Face download and the SCF download. SCF data is CC BY-ND 4.0 and is not hosted here (ADR-002), so a demo cannot ship real SCF controls either.
+**Context.** Trying the model-backed tools needed an LLM provider key (Groq at the time, OpenRouter since ADR-012), a Hugging Face download and the SCF download. SCF data is CC BY-ND 4.0 and is not hosted here (ADR-002), so a demo cannot ship real SCF controls either.
 
 **Decision.** `DEMO_MODE=1` (also `true`, `yes`, `on`) swaps the two external services and the SCF data for local stand-ins, in `src/demo.py`, behind a narrow seam in `src/mapper.py`:
 
 - `load_scf_database()` returns `DEMO_CATALOG`: 19 synthetic controls written for this project, with no SCF text and no SCF IDs. IDs use made-up prefixes that start with `D` (`DCRY-01`, `DIAM-02`) so they pass the `SCFControl` ID check, and domains are named "Demo …". The crosswalk columns name real frameworks (NIST SP 800-53, ISO 27001, SOC 2, PCI DSS, GDPR, …) with illustrative references, which are facts about those frameworks, not SCF content.
 - `_get_embedding_model()` returns a hashed bag-of-words encoder (CRC32 buckets of crudely stemmed words). The demo catalog is embedded directly, so the on-disk embedding cache of the real SCF is never touched.
-- `_get_llm()` returns a canned model with ChatOpenRouter's `with_structured_output(schema)` interface, built on a LangChain `RunnableLambda`. It reads the candidate list from the rendered prompt and returns the top three candidates, in retrieval order, with fixed confidences (82, 64, 47) and justifications that say they are demo output. For a scope, it returns the top six and their domains. It also returns `AC-2`, a NIST SP 800-53 ID, on every call, deliberately, so the demo shows validation rejecting an ID that was not among the candidates.
+- `_get_llm()` returns a canned model with the same `with_structured_output(schema)` interface as the real chat model, built on a LangChain `RunnableLambda`. It reads the candidate list from the rendered prompt and returns the top three candidates, in retrieval order, with fixed confidences (82, 64, 47) and justifications that say they are demo output. For a scope, it returns the top six and their domains. It also returns `AC-2`, a NIST SP 800-53 ID, on every call, deliberately, so the demo shows validation rejecting an ID that was not among the candidates.
 
 Everything else is the production code on demo data: the prompts, candidate retrieval and ranking, validation, enrichment, batch deduplication and Priority Score ranking, the gap analysis, and the exports. Demo mode never activates silently: every page and the sidebar carry a "DEMO MODE — synthetic catalog, canned model" badge, the sidebar hides the SCF download button, labels name the synthetic catalog, and exports are stamped (a "Demo Notice" column on every CSV row; `[DEMO DATA]` in the OSCAL title, and a notice in the metadata remarks, the mapping description and the target resource). It is off by default and refused when `ENVIRONMENT` is `production` or `staging`. `scripts/run_eval.py` and `scripts/generate_mock_output.py` refuse to run in demo mode, so demo output can never be recorded as an evaluation result or a sample of real output.
 
 **Consequences.**
 - Anyone can run all three tools in two minutes with no keys, and the screenshots in the README come from a reproducible demo run (`scripts/capture_screenshots.mjs`).
 - Demo output says nothing about the accuracy of the real pipeline. The catalog is not the SCF, the embedder only matches shared words, and the canned model makes no judgment; its picks are whatever the toy retrieval ranks first, which is sometimes a weak match. The evaluation (ADR-009) is the place for accuracy.
-- The embedding cache, the OpenRouter retry behaviour and the SCF download are not exercised in demo mode; the offline tests (ADR-007) cover them.
+- The embedding cache, the model-call retry behaviour and the SCF download are not exercised in demo mode; the offline tests (ADR-007) cover them.
 - `tests/test_demo.py` runs all three tools in `AppTest` with demo mode on and checks the badge, the rejected ID and the export stamps, so the seam cannot drift silently.
 
 ---
@@ -186,3 +186,20 @@ Everything else is the production code on demo data: the prompts, candidate retr
 - On SCF 2026.3 with `lab_data/sample_controls_with_scf_mapping.csv` (in-place rows only), 8 of 61 SOC 2 criteria have a listed control, which is the number an assessor would start from. 33 of the 61 are the Security (common) criteria; a report scoped to Security alone should read those rows.
 - A requirement with a listed control is not a requirement met. SCF's mappings vary in strength (its STRM relationships are not in the crosswalk columns), and one control rarely satisfies a whole criterion. The UI says so under the metrics; a requirement with none is still a clear gap.
 - The requirement list is what SCF cites, not the framework's full list. A requirement SCF maps nothing to does not appear, and the count can include references at more than one level (NIST CSF cites functions, categories and subcategories).
+
+---
+
+## ADR-012: Switch the LLM provider from Groq to OpenRouter
+
+**Status:** Accepted (supersedes ADR-005)
+
+**Context.** ADR-005 bound the model-backed tools to Groq through `langchain-groq`. That tied the app, the evaluation (`scripts/run_eval.py --llm`) and the sample-output script to a single vendor's model catalogue, although the evaluation needs to compare models, including ones Groq does not serve.
+
+**Decision.** `_get_llm` (`src/mapper.py`) builds LangChain's `ChatOpenAI(temperature=0, max_retries=0)` pointed at OpenRouter's OpenAI-compatible endpoint (`https://openrouter.ai/api/v1`), with the key from `OPENROUTER_API_KEY` and the model from `OPENROUTER_MODEL`, defaulting to `meta-llama/llama-3.1-8b-instruct`, the same Llama 3.1 8B family as before. Structured output still goes through `with_structured_output`. `langchain-groq` and `groq` are removed from the dependencies.
+
+**Consequences.**
+- Any model OpenRouter serves can be set through `OPENROUTER_MODEL` without code changes, so the evaluation can score several models on the same gold set.
+- The retry policy from ADR-005 is unchanged: the client's own retries stay off and `_invoke_chain` is the only retry layer.
+- The submitted text now goes to OpenRouter, which forwards it to the model's upstream provider. The UI, README and SECURITY.md name OpenRouter; which upstream provider serves a request, and its data policy, depend on OpenRouter's routing for the chosen model.
+- The committed sample outputs in `lab_data/sample_outputs/` predate this switch and came from Groq's `llama-3.1-8b-instant`; they are not regenerated.
+- The Gap Analyzer and `DEMO_MODE` are unaffected: neither calls a model.

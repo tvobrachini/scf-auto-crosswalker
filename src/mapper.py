@@ -623,4 +623,6 @@ if __name__ == "__main__":
                     )
     except Exception as e:
         logger.error("Error running OpenRouter mapping: %s", e)
-        logger.error("Ensure you have set your OPENROUTER_API_KEY environment variable.")
+        logger.error(
+            "Ensure you have set your OPENROUTER_API_KEY environment variable."
+        )

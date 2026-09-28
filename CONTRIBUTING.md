@@ -10,7 +10,7 @@ uv run pre-commit install     # detect-secrets, ruff, ruff-format, bandit
 DEMO_MODE=1 uv run streamlit run app.py   # no keys or downloads needed
 ```
 
-The real tools need a OpenRouter key in `.env` (see `.env.example`) and the SCF download from the sidebar.
+The real tools need an OpenRouter key in `.env` (see `.env.example`) and the SCF download from the sidebar.
 
 ## Before opening a pull request
 

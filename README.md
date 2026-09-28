@@ -85,13 +85,13 @@ Audit Scope Analyzer on the lab scope: suggested domains and controls to test, t
 </tr>
 </table>
 
-**And on real data.** The Gap Analyzer needs no language model, so it can run against the real SCF release without a OpenRouter key. This is SCF 2026.3 (1,591 controls, from the official SCF repository) against the SOC 2 column, for `lab_data/sample_controls_with_scf_mapping.csv`, a control list with its own numbering and a column mapping each control to SCF IDs:
+**And on real data.** The Gap Analyzer needs no language model, so it can run against the real SCF release without an OpenRouter key. This is SCF 2026.3 (1,591 controls, from the official SCF repository) against the SOC 2 column, for `lab_data/sample_controls_with_scf_mapping.csv`, a control list with its own numbering and a column mapping each control to SCF IDs:
 
 ![Gap Analyzer on the real SCF 2026.3 release: 8 of 61 SOC 2 criteria have a listed control; 6 of 407 mapped SCF controls are listed](docs/screenshots/gap-analyzer-real-scf-2026-3.png)
 
 SCF cites 61 SOC 2 criteria across all five categories (33 of them in Security, the common criteria many SOC 2 reports are scoped to); 8 have at least one SCF control the sample lists as implemented. Counted by SCF control instead, 6 of the 407 mapped controls are listed, which is why the report leads with requirements. The analyzer picked the `SCF Mapping` column because it names the most SCF IDs, and three mapped controls are not counted because their rows are "Partially implemented" or "Planned". Captured with `MODE=real node scripts/capture_screenshots.mjs`. The table shows framework references and SCF control IDs only, no SCF control text. SCF © Secure Controls Framework (securecontrolsframework.com), CC BY-ND 4.0. The SCF data itself is not stored in this repository.
 
-[`lab_data/sample_outputs/`](lab_data/sample_outputs) holds raw outputs from earlier runs with the real SCF and a OpenRouter model, and [`lab_data/README.md`](lab_data/README.md) annotates them. They record the failure modes the current validation was built for: a scope analysis that returned only NIST 800-53 IDs, and control descriptions rewritten by the model.
+[`lab_data/sample_outputs/`](lab_data/sample_outputs) holds raw outputs from earlier runs with the real SCF and Groq's `llama-3.1-8b-instant` (before the switch to OpenRouter), and [`lab_data/README.md`](lab_data/README.md) annotates them. They record the failure modes the current validation was built for: a scope analysis that returned only NIST 800-53 IDs, and control descriptions rewritten by the model.
 
 ---
 
@@ -266,7 +266,7 @@ It reports retrieval hit rate, mean recall and MRR at k = 1 to 50 (50 is what th
 | 10 | 38.0% | 27.1% | 5.2% |
 | 50 | 62.0% | 46.2% | 22.8% |
 
-At k = 50, 38% of cases have no control among the model's candidates that the published mappings link to the Security Hub control, so retrieval is the pipeline's main bottleneck. The embedding search clearly beats word overlap and chance. The labels are transitive, so the numbers measure consistency with AWS's and SCF's published mappings, not whether a suggestion is right. The model step has not been scored yet; `--llm` does it with a OpenRouter key. [`eval/README.md`](eval/README.md) has the method, provenance, all k, a stricter subset, and the caveats.
+At k = 50, 38% of cases have no control among the model's candidates that the published mappings link to the Security Hub control, so retrieval is the pipeline's main bottleneck. The embedding search clearly beats word overlap and chance. The labels are transitive, so the numbers measure consistency with AWS's and SCF's published mappings, not whether a suggestion is right. The model step has not been scored yet; `--llm` does it with an OpenRouter key. [`eval/README.md`](eval/README.md) has the method, provenance, all k, a stricter subset, and the caveats.
 
 ---
 
@@ -289,7 +289,7 @@ src/
   ui/components/                Sidebar, demo badge and styles
 scripts/run_eval.py             Build the gold set and score the pipeline
 scripts/import_awsdocs_controls.py  Security Hub controls from the public user guide sources
-scripts/generate_mock_output.py Regenerate lab_data/sample_outputs (needs a OpenRouter key)
+scripts/generate_mock_output.py Regenerate lab_data/sample_outputs (needs an OpenRouter key)
 scripts/capture_screenshots.mjs Regenerate docs/screenshots from a DEMO_MODE run (Playwright)
 docs/screenshots/               README screenshots (DEMO_MODE, synthetic catalog)
 eval/                           Evaluation method and results
@@ -302,7 +302,7 @@ DECISIONS.md                    Architecture decision records
 
 ## Limitations and measurement
 
-- **Retrieval results only; the model step is unmeasured.** Retrieval has been scored on SCF 2026.3 (see [Evaluation](#evaluation)): at k = 50, 62% of the 221 Security Hub controls in the gold set have at least one SCF control linked by the published mappings among the candidates, so 38% do not. The model step has not been scored against a OpenRouter model, so no precision figure is claimed. The retrieval run used an ONNX export of the embedding model, verified by hash and against a second export but not against the PyTorch model the app loads, and the AWS user guide as of March 2023. The earlier sample outputs include weak matches and, for the Scope Analyzer, NIST IDs instead of SCF IDs, which validation now rejects.
+- **Retrieval results only; the model step is unmeasured.** Retrieval has been scored on SCF 2026.3 (see [Evaluation](#evaluation)): at k = 50, 62% of the 221 Security Hub controls in the gold set have at least one SCF control linked by the published mappings among the candidates, so 38% do not. The model step has not been scored against an OpenRouter model, so no precision figure is claimed. The retrieval run used an ONNX export of the embedding model, verified by hash and against a second export but not against the PyTorch model the app loads, and the AWS user guide as of March 2023. The earlier sample outputs include weak matches and, for the Scope Analyzer, NIST IDs instead of SCF IDs, which validation now rejects.
 - **Validation proves existence, not fit.** An ID that passes validation is a real SCF control that was among the candidates. Whether it is the right control is the reviewer's call.
 - **Confidence is self-reported** by the model and is not calibrated.
 - **Retrieval bounds the answer.** If the right control is not among the retrieved candidates, the model cannot pick it.
