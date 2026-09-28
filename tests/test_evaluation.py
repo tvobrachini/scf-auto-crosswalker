@@ -233,7 +233,7 @@ def test_run_eval_cli_end_to_end(monkeypatch, tmp_path, fake_embeddings):
     assert "## Gold set" not in results  # stats need the controls file
 
 
-def test_run_eval_cli_openrouter_model(monkeypatch, tmp_path):
+def test_run_eval_cli_openrouter_model(monkeypatch, tmp_path, fake_embeddings):
     """--llm --openrouter-model scores via use_openrouter_model, not the default."""
     import importlib.util
     import os

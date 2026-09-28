@@ -85,7 +85,9 @@ def run_scope_analysis():
 if __name__ == "__main__":
     if demo_mode_enabled():
         # Sample outputs document real runs; demo output must not land there.
-        print("[-] DEMO_MODE is on; sample outputs need the real SCF data and OpenRouter.")
+        print(
+            "[-] DEMO_MODE is on; sample outputs need the real SCF data and OpenRouter."
+        )
         sys.exit(1)
     os.makedirs(OUT_DIR, exist_ok=True)
     if not os.environ.get("OPENROUTER_API_KEY"):
