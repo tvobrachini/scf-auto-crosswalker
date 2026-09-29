@@ -42,9 +42,9 @@ uv run --with onnxruntime python scripts/run_eval.py \
 # 3. Score the model step too: one OpenRouter call per case.
 uv run python scripts/run_eval.py --gold eval/gold.csv --llm
 
-# 3b. Or on an OpenRouter model instead of OpenRouter (needs OPENROUTER_API_KEY;
-#     langchain-openai is not a project dependency, only used for this).
-uv run --with langchain-openai python scripts/run_eval.py \
+# 3b. Or on another OpenRouter model than the app's default (the same as
+#     setting OPENROUTER_MODEL for this run; same client, same retries).
+uv run python scripts/run_eval.py \
     --gold eval/gold.csv --llm --openrouter-model <model id>
 ```
 
@@ -148,7 +148,7 @@ The ONNX run above was repeated with the model the app actually loads: `sentence
 
 Every table is identical, and so is `per_case_retrieval.csv`: all 221 cases get the same first-gold rank from PyTorch as from the ONNX export. The only change in `results.md` is the embedding-model label, which now names sentence-transformers.
 
-### Retriever comparison, 2026-09-29
+### Retriever comparison, 2026-09-28
 
 Retrieval is the bottleneck, so the obvious fixes were tried on the same 221 cases: a larger embedding model, and reciprocal-rank fusion (RRF, k = 60, equal weights) of rankings that miss different cases. `scripts/compare_retrievers.py` checks every model archive against a pinned sha256, ranks all 1,591 controls with the same best-chunk scheme as `_semantic_filter`, and writes [`retriever_comparison.md`](retriever_comparison.md). The inputs were re-downloaded for this run and matched the hashes above; the app's MiniLM row reproduces the retrieval table exactly.
 

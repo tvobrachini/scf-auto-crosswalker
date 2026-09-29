@@ -262,7 +262,7 @@ def test_run_eval_cli_end_to_end(monkeypatch, tmp_path, fake_embeddings):
 
 
 def test_run_eval_cli_openrouter_model(monkeypatch, tmp_path, fake_embeddings):
-    """--llm --openrouter-model scores via use_openrouter_model, not the default."""
+    """--llm --openrouter-model runs the app's pipeline on that model."""
     import importlib.util
     import os
 
@@ -295,16 +295,22 @@ def test_run_eval_cli_openrouter_model(monkeypatch, tmp_path, fake_embeddings):
     results = (tmp_path / "results.md").read_text()
     assert "| Model" not in results  # skipped: no OPENROUTER_API_KEY
 
-    def fake_use_openrouter_model(model_name, api_key):
-        assert model_name == "openrouter/some-model"
-        assert api_key == "fake-openrouter-key"  # pragma: allowlist secret
+    from mapper import MappedControl, MappingResult
 
-        def suggest(text: str) -> list[str]:
-            return ["CRY-01"]
+    seen_models = []
 
-        return f"{model_name} (OpenRouter)", suggest
+    def fake_map_text_to_scf(text, top_k=3):
+        # The app's own pipeline is called, with the model set for this run.
+        seen_models.append(os.environ.get("OPENROUTER_MODEL"))
+        return MappingResult(
+            mappings=[
+                MappedControl(control_id="CRY-01", confidence=90, justification="j")
+            ],
+            rejected_control_ids=["SC-8"],
+        )
 
-    monkeypatch.setattr(run_eval, "use_openrouter_model", fake_use_openrouter_model)
+    monkeypatch.setattr(run_eval, "map_text_to_scf", fake_map_text_to_scf)
+    monkeypatch.delenv("OPENROUTER_MODEL", raising=False)
     monkeypatch.setenv("OPENROUTER_API_KEY", "fake-openrouter-key")
     assert (
         run_eval.main(
@@ -318,53 +324,13 @@ def test_run_eval_cli_openrouter_model(monkeypatch, tmp_path, fake_embeddings):
         )
         == 0
     )
+    assert seen_models == ["openrouter/some-model"]
     results = (tmp_path / "results.md").read_text()
     assert "Model (openrouter/some-model (OpenRouter))" in results
     assert "Precision of suggestions | 100.0%" in results
+    assert "IDs rejected by validation | 1 |" in results
     per_case = (tmp_path / "per_case_model.csv").read_text(encoding="utf-8")
-    assert per_case.splitlines()[1] == "CloudFront.3,CRY-01,1,,0"
-
-
-def test_use_openrouter_model_swaps_llm_and_wraps_retry(monkeypatch):
-    """Real wiring: mapper._get_llm returns a ChatOpenAI, suggest retries
-    the OpenAI SDK's transient errors. No network call is made.
-
-    Skipped unless langchain-openai is installed (`uv run --with
-    langchain-openai pytest`), since it is not a project dependency.
-    """
-    pytest.importorskip("langchain_openai")
-    import importlib.util
-    import os
-
-    import mapper
-
-    spec = importlib.util.spec_from_file_location(
-        "run_eval",
-        os.path.join(
-            os.path.dirname(os.path.dirname(__file__)), "scripts", "run_eval.py"
-        ),
-    )
-    run_eval = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(run_eval)
-
-    label, suggest = run_eval.use_openrouter_model(
-        "openrouter/some-model", "fake-openrouter-key"
-    )
-    assert label == "openrouter/some-model (OpenRouter)"
-
-    llm = mapper._get_llm()
-    assert type(llm).__name__ == "ChatOpenAI"
-    assert llm.model_name == "openrouter/some-model"
-    assert str(llm.openai_api_base) == "https://openrouter.ai/api/v1"
-
-    import openai
-
-    assert suggest.retry.retry.exception_types == (
-        openai.RateLimitError,
-        openai.APIConnectionError,
-        openai.APITimeoutError,
-        openai.InternalServerError,
-    )
+    assert per_case.splitlines()[1] == "CloudFront.3,CRY-01,1,SC-8,0"
 
 
 def test_run_eval_refuses_demo_mode(monkeypatch, tmp_path):
