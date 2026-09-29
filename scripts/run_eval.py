@@ -35,6 +35,7 @@ import argparse
 import json
 import os
 import sys
+from collections import Counter
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(os.path.join(ROOT, "src"))
@@ -201,6 +202,9 @@ def main(argv: list[str] | None = None) -> int:
             model_id = os.environ.get("OPENROUTER_MODEL", DEFAULT_OPENROUTER_MODEL)
             llm_name = f"{model_id} (OpenRouter)"
             model = score_model(cases, _suggest)
+            failures = Counter(m.error for m in model.per_case if m.failed)
+            for error, count in failures.most_common():
+                print(f"Model call failed for {count} case(s): {error}")
 
     table = results_markdown(retrieval, model, read_scf_release(), column, llm_name)
     sections = [table, f"Embedding model: {embedder}; SCF controls ranked: {len(ids)}"]

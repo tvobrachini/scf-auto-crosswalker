@@ -433,6 +433,7 @@ class ModelCase:
     rejected: list[str]
     correct: int
     failed: bool = False
+    error: str = ""  # exception class and message when the call failed
 
 
 @dataclass
@@ -463,9 +464,10 @@ def score_model(
     for c in cases:
         try:
             answer = suggest(c.text)
-        except Exception:  # one failing case must not lose the whole run
+        except Exception as e:  # one failing case must not lose the whole run
             errors += 1
-            per_case.append(ModelCase(c.case_id, [], [], 0, failed=True))
+            error = f"{type(e).__name__}: {e}"[:300]
+            per_case.append(ModelCase(c.case_id, [], [], 0, failed=True, error=error))
             continue
         if isinstance(answer, Suggestion):
             ids, rejected = answer.ids, answer.rejected
@@ -499,7 +501,14 @@ def write_per_case_model_csv(path: str, scores: ModelScores) -> None:
     with open(path, "w", encoding="utf-8", newline="") as f:
         writer = csv.writer(f)
         writer.writerow(
-            ["case_id", "suggested", "n_gold_suggested", "rejected", "call_failed"]
+            [
+                "case_id",
+                "suggested",
+                "n_gold_suggested",
+                "rejected",
+                "call_failed",
+                "error_type",
+            ]
         )
         for m in scores.per_case:
             writer.writerow(
@@ -509,6 +518,7 @@ def write_per_case_model_csv(path: str, scores: ModelScores) -> None:
                     m.correct,
                     " ".join(m.rejected),
                     int(m.failed),
+                    m.error.split(":", 1)[0],
                 ]
             )
 

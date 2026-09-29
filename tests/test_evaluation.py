@@ -152,6 +152,7 @@ def test_score_model_survives_failing_calls():
 
     m = score_model(cases, suggest)
     assert m.errors == 1
+    assert m.per_case[0].error == "RuntimeError: 429 after retries"
     assert m.hit_rate == 0.5
     assert m.precision == 1.0
 
@@ -330,7 +331,7 @@ def test_run_eval_cli_openrouter_model(monkeypatch, tmp_path, fake_embeddings):
     assert "Precision of suggestions | 100.0%" in results
     assert "IDs rejected by validation | 1 |" in results
     per_case = (tmp_path / "per_case_model.csv").read_text(encoding="utf-8")
-    assert per_case.splitlines()[1] == "CloudFront.3,CRY-01,1,SC-8,0"
+    assert per_case.splitlines()[1] == "CloudFront.3,CRY-01,1,SC-8,0,"
 
 
 def test_run_eval_refuses_demo_mode(monkeypatch, tmp_path):
