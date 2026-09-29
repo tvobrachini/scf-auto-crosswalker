@@ -128,7 +128,7 @@ The generated report is [`results.md`](results.md); per-case ranks (control ID, 
 **What the numbers show**
 
 - At k = 50, the shortlist the model sees, 84 of 221 cases (38%) contain no control that the published mappings link to the finding. For those, the model cannot give an answer that agrees with AWS and SCF. Among cases with at most 10 gold controls, the share is 52%. Retrieval is the pipeline's main bottleneck on this data.
-- Embeddings beat word overlap: at k = 50, 62.0% against 46.2% for TF-IDF over the same texts (paired on the same cases: 53 cases only the embedding finds, 18 only TF-IDF finds; exact McNemar p ≈ 4e-5). At k = 10 it is 38.0% against 27.1% (40 vs 16, p ≈ 0.002). The 18 cases only TF-IDF finds suggest that a hybrid ranker could help; that has not been tried.
+- Embeddings beat word overlap: at k = 50, 62.0% against 46.2% for TF-IDF over the same texts (paired on the same cases: 53 cases only the embedding finds, 18 only TF-IDF finds; exact McNemar p ≈ 4e-5). At k = 10 it is 38.0% against 27.1% (40 vs 16, p ≈ 0.002). The 18 cases only TF-IDF finds suggested that a hybrid ranker could help; the comparison below tried it, and it does not help significantly.
 - Both are far above chance. Random ranking would already reach 22.8% at k = 50 because gold sets are large, which is why the random column is there.
 - With 221 cases, a hit rate near 62% has a 95% interval of roughly ±6 points.
 
@@ -139,3 +139,25 @@ The generated report is [`results.md`](results.md); per-case ranks (control ID, 
 - **Today's Security Hub.** The control list and texts are the user guide as of March 2023. AWS has since added and renamed controls and changed mappings. The description is the guide's first paragraph, an approximation of the API's `Description` field.
 - **The exact production model.** The app runs the PyTorch model through sentence-transformers. This run used an ONNX export whose hash matches the one chromadb pins and which matches a second, independent export exactly, but it was not compared with the PyTorch model itself (Hugging Face was not reachable).
 - **Other inputs.** The inputs are short Security Hub control titles and descriptions, not live findings, policy text or scope documents.
+
+### Retriever comparison, 2026-09-29
+
+Retrieval is the bottleneck, so the obvious fixes were tried on the same 221 cases: a larger embedding model, and reciprocal-rank fusion (RRF, k = 60, equal weights) of rankings that miss different cases. `scripts/compare_retrievers.py` checks every model archive against a pinned sha256, ranks all 1,591 controls with the same best-chunk scheme as `_semantic_filter`, and writes [`retriever_comparison.md`](retriever_comparison.md). The inputs were re-downloaded for this run and matched the hashes above; the app's MiniLM row reproduces the retrieval table exactly.
+
+| Retriever | Hit @10 | Hit @50 | Recall @50 | MRR @50 | Paired vs app @50 (gained / lost, p) |
+|---|---:|---:|---:|---:|---|
+| all-MiniLM-L6-v2 (the app, 22M parameters) | 38.0% | 62.0% | 21.7% | 0.188 | |
+| bge-small-en-v1.5 (33M) | 33.5% | 60.2% | 20.4% | 0.157 | +18 / −22, p = 0.64 |
+| bge-base-en-v1.5 (109M) | 37.6% | 67.9% | 19.5% | 0.204 | +30 / −17, p = 0.08 |
+| MiniLM + TF-IDF (RRF) | 33.5% | 64.3% | 17.6% | 0.195 | +18 / −13, p = 0.47 |
+| bge-base + TF-IDF (RRF) | 32.1% | 64.3% | 15.9% | 0.174 | +25 / −20, p = 0.55 |
+| MiniLM + bge-base (RRF) | 34.4% | 67.4% | 22.8% | 0.195 | +17 / −5, p = 0.017 |
+
+The bge models are Qdrant fastembed's ONNX exports (`fast-bge-small-en-v1.5.tar.gz`, sha256 `3858004b…`; `fast-bge-base-en-v1.5.tar.gz`, sha256 `b2e829f8…`), run with CLS pooling, 512-token truncation and bge's retrieval query prefix.
+
+**Reading it**
+
+- **No alternative is a clear improvement.** At k = 10 none beats the app's model. Fusing in TF-IDF, which the TF-IDF-only cases suggested, lowers hit rate at k = 10 and gains nothing significant at k = 50.
+- **The one p below 0.05 does not survive the search that found it.** MiniLM + bge-base was the best of six alternatives, all chosen and scored on these same cases. With a Bonferroni correction for six comparisons the threshold is 0.008. It would also run two embedding models on every input.
+- **bge-base trades recall for hit rate.** It puts one gold control in the shortlist more often (p = 0.08), but finds fewer gold controls per case, at five times the parameters.
+- **So the app keeps MiniLM**, and the remaining misses point to the input and the labels more than to the model: short, generic Security Hub descriptions, and 815 SCF controls without an 800-53 entry that can never count as a hit. A held-out case set would be needed before adopting any of the variants above.
