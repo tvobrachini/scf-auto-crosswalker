@@ -26,7 +26,8 @@ Build the Security Hub -> NIST 800-53 -> SCF gold set and score the pipeline.
 
 Needs the SCF database in data/ and, without --onnx-model, network access to
 Hugging Face for the embedding model. Writes eval/results.md and
-eval/per_case_retrieval.csv (IDs and numbers only); eval/gold.csv holds AWS
+eval/per_case_retrieval.csv (IDs and numbers only), and with --llm
+eval/per_case_model.csv; eval/gold.csv holds AWS
 text and is git-ignored. See eval/README.md for what the numbers mean.
 """
 
@@ -40,6 +41,7 @@ sys.path.append(os.path.join(ROOT, "src"))
 
 from evaluation import (  # noqa: E402
     SMALL_GOLD,
+    Suggestion,
     build_gold_set,
     comparison_markdown,
     gold_set_stats,
@@ -52,6 +54,7 @@ from evaluation import (  # noqa: E402
     tfidf_retriever,
     write_gold_csv,
     write_per_case_csv,
+    write_per_case_model_csv,
 )
 from demo import demo_mode_enabled  # noqa: E402
 from fetch_scf import read_scf_release  # noqa: E402
@@ -67,6 +70,15 @@ from mapper import (  # noqa: E402
 
 EVAL_DIR = os.path.join(ROOT, "eval")
 DEFAULT_KS = (1, 3, 5, 10, 20, CROSSWALK_CANDIDATES)
+
+
+def _suggestion(result) -> Suggestion:
+    """The suggested IDs and the IDs validation rejected, from a MappingResult."""
+    if result is None:
+        return Suggestion([])
+    return Suggestion(
+        [m.control_id for m in result.mappings], list(result.rejected_control_ids)
+    )
 
 
 def use_onnx_model(model_dir: str, allow_unverified: bool = False) -> str:
@@ -148,9 +160,8 @@ def use_openrouter_model(model_name: str, api_key: str):
         ),
         reraise=True,
     )
-    def suggest(text: str) -> list[str]:
-        result = map_text_to_scf(text, top_k=3)
-        return [m.control_id for m in result.mappings] if result else []
+    def suggest(text: str) -> Suggestion:
+        return _suggestion(map_text_to_scf(text, top_k=3))
 
     return f"{model_name} (OpenRouter)", suggest
 
@@ -249,9 +260,8 @@ def main(argv: list[str] | None = None) -> int:
         else:
             llm_name = os.environ.get("OPENROUTER_MODEL", DEFAULT_OPENROUTER_MODEL)
 
-            def suggest(text: str) -> list[str]:
-                result = map_text_to_scf(text, top_k=3)
-                return [m.control_id for m in result.mappings] if result else []
+            def suggest(text: str) -> Suggestion:
+                return _suggestion(map_text_to_scf(text, top_k=3))
 
         if suggest is not None:
             model = score_model(cases, suggest)
@@ -290,8 +300,13 @@ def main(argv: list[str] | None = None) -> int:
         f.write(report)
     per_case = os.path.join(EVAL_DIR, "per_case_retrieval.csv")
     write_per_case_csv(per_case, cases, rankings, len(ids), k_max)
+    saved = [out, per_case]
+    if model is not None:
+        per_case_model = os.path.join(EVAL_DIR, "per_case_model.csv")
+        write_per_case_model_csv(per_case_model, model)
+        saved.append(per_case_model)
     print(report)
-    print(f"Saved to {out} and {per_case}")
+    print("Saved to " + ", ".join(saved))
     return 0
 
 

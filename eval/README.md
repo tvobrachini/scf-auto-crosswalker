@@ -48,7 +48,7 @@ uv run --with langchain-openai python scripts/run_eval.py \
     --gold eval/gold.csv --llm --openrouter-model <model id>
 ```
 
-The report is written to `eval/results.md` and the per-case ranks to `eval/per_case_retrieval.csv`. Both hold only IDs and numbers. `eval/gold.csv` and the control files hold AWS documentation text (CC BY-SA 4.0) and are not committed.
+The report is written to `eval/results.md`, the per-case ranks to `eval/per_case_retrieval.csv` and, with `--llm`, each case's suggested and rejected IDs to `eval/per_case_model.csv`. All three hold only IDs and numbers. `eval/gold.csv` and the control files hold AWS documentation text (CC BY-SA 4.0) and are not committed.
 
 ## Metrics
 
@@ -63,6 +63,8 @@ The report is written to `eval/results.md` and the per-case ranks to `eval/per_c
 | Model | Hit rate | Share of cases with at least one gold suggestion. |
 | Model | Cases with no suggestion | Cases where the pipeline suggested nothing: the model returned no IDs, or every ID it returned was rejected. |
 | Model | Cases where the call failed | Cases where the OpenRouter call failed after retries. They are skipped, not retried, and count as misses in the hit rate. |
+| Model | IDs rejected by validation | IDs the model returned that are not SCF controls or were not among its candidates. Validation drops them before anything is shown; this counts what it caught. |
+| Model | Cases with a rejected ID | Cases where validation dropped at least one ID. |
 
 ## Results
 
@@ -137,8 +139,14 @@ The generated report is [`results.md`](results.md); per-case ranks (control ID, 
 - **Whether a suggestion is right.** The labels are transitive. A "miss" can be an SCF control that fits the finding but that SCF did not map to the same 800-53 requirement; 815 of the 1,591 SCF controls have no 800-53 entry at all and can never count as a hit. A "hit" can be a loose fit that happens to share a broad requirement.
 - **The model step.** No OpenRouter key was available, so the precision of the pipeline's suggestions is unmeasured.
 - **Today's Security Hub.** The control list and texts are the user guide as of March 2023. AWS has since added and renamed controls and changed mappings. The description is the guide's first paragraph, an approximation of the API's `Description` field.
-- **The exact production model.** The app runs the PyTorch model through sentence-transformers. This run used an ONNX export whose hash matches the one chromadb pins and which matches a second, independent export exactly, but it was not compared with the PyTorch model itself (Hugging Face was not reachable).
+- **The exact production model** is no longer a gap: the PyTorch rerun below gives identical results.
 - **Other inputs.** The inputs are short Security Hub control titles and descriptions, not live findings, policy text or scope documents.
+
+### The app's PyTorch model, 2026-09-28
+
+The ONNX run above was repeated with the model the app actually loads: `sentence-transformers/all-MiniLM-L6-v2` at Hugging Face revision `1110a243fdf4706b3f48f1d95db1a4f5529b4d41`, through sentence-transformers 6.1.0, transformers 5.10.4 and torch 2.13.0, run offline from the local model cache with a fresh embeddings cache. The gold set was rebuilt from the same pinned inputs (workbook sha256 `5a89bf2d…`, AWS docs commit `47bfe2f`; 251 controls, 221 cases).
+
+Every table is identical, and so is `per_case_retrieval.csv`: all 221 cases get the same first-gold rank from PyTorch as from the ONNX export. The only change in `results.md` is the embedding-model label, which now names sentence-transformers.
 
 ### Retriever comparison, 2026-09-29
 

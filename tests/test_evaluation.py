@@ -6,6 +6,7 @@ import pytest
 
 from evaluation import (
     GoldCase,
+    Suggestion,
     build_gold_set,
     canonical_nist,
     comparison_markdown,
@@ -26,6 +27,7 @@ from evaluation import (
     tfidf_retriever,
     write_gold_csv,
     write_per_case_csv,
+    write_per_case_model_csv,
 )
 
 COL = "NIST SP 800-53 R5"
@@ -152,6 +154,32 @@ def test_score_model_survives_failing_calls():
     assert m.errors == 1
     assert m.hit_rate == 0.5
     assert m.precision == 1.0
+
+
+def test_score_model_counts_rejected_ids(tmp_path):
+    cases = [
+        GoldCase("a", "ta", {"X-01"}, []),
+        GoldCase("b", "tb", {"Y-01"}, []),
+        GoldCase("c", "tc", {"Z-01"}, []),
+    ]
+    answers = {
+        "ta": Suggestion(["X-01"], ["AC-1", "SC-8"]),
+        "tb": Suggestion([], ["NOPE-99"]),  # every ID rejected: an empty case
+        "tc": ["Z-01"],  # a plain list still works
+    }
+    m = score_model(cases, lambda t: answers[t])
+    assert (m.rejected, m.cases_with_rejections, m.empty) == (3, 2, 1)
+    assert m.precision == 1.0
+    assert m.hit_rate == pytest.approx(2 / 3)
+
+    path = tmp_path / "per_case_model.csv"
+    write_per_case_model_csv(str(path), m)
+    rows = list(csv.DictReader(path.open(encoding="utf-8")))
+    assert [r["rejected"] for r in rows] == ["AC-1 SC-8", "NOPE-99", ""]
+    assert [r["n_gold_suggested"] for r in rows] == ["1", "0", "1"]
+    md = results_markdown([], m, None, None)
+    assert "| Model | IDs rejected by validation | 3 |" in md
+    assert "| Model | Cases with a rejected ID | 2 |" in md
 
 
 def test_score_retrieval_keeps_duplicate_case_ids_apart():
@@ -293,6 +321,8 @@ def test_run_eval_cli_openrouter_model(monkeypatch, tmp_path, fake_embeddings):
     results = (tmp_path / "results.md").read_text()
     assert "Model (openrouter/some-model (OpenRouter))" in results
     assert "Precision of suggestions | 100.0%" in results
+    per_case = (tmp_path / "per_case_model.csv").read_text(encoding="utf-8")
+    assert per_case.splitlines()[1] == "CloudFront.3,CRY-01,1,,0"
 
 
 def test_use_openrouter_model_swaps_llm_and_wraps_retry(monkeypatch):
@@ -592,3 +622,26 @@ def test_comparison_markdown_and_per_case_csv(tmp_path):
         "random_hit_probability_at_2": "0.0200",
     }
     assert rows[1]["first_gold_rank_emb"] == ""
+
+
+def test_run_eval_suggestion_keeps_rejected_ids():
+    import importlib.util
+    import os
+
+    from mapper import MappedControl, MappingResult
+
+    spec = importlib.util.spec_from_file_location(
+        "run_eval",
+        os.path.join(
+            os.path.dirname(os.path.dirname(__file__)), "scripts", "run_eval.py"
+        ),
+    )
+    run_eval = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(run_eval)
+
+    result = MappingResult(
+        mappings=[MappedControl(control_id="CRY-03", confidence=80, justification="j")],
+        rejected_control_ids=["SC-8"],
+    )
+    assert run_eval._suggestion(result) == Suggestion(["CRY-03"], ["SC-8"])
+    assert run_eval._suggestion(None) == Suggestion([])
