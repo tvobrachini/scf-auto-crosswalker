@@ -409,6 +409,13 @@ _TRANSIENT_ERRORS = (
 
 MAX_ATTEMPTS = 3
 
+# Cap on the model's answer. The longest answer is a scope analysis (at most
+# SCOPE_MAX_CONTROLS IDs, domains and a short rationale), well under this.
+# Without a cap OpenRouter reserves the model's whole remaining context for
+# the reply (about 115k tokens for Llama 3.1 8B) and refuses the call with a
+# 402 when the account balance cannot cover that reservation.
+MAX_OUTPUT_TOKENS = 2048
+
 
 @retry(
     wait=wait_exponential(multiplier=1, min=2, max=60),
@@ -434,6 +441,7 @@ def _get_llm() -> ChatOpenAI | CannedChatModel:
         openai_api_key=os.environ.get("OPENROUTER_API_KEY"),
         openai_api_base="https://openrouter.ai/api/v1",
         max_retries=0,
+        max_tokens=MAX_OUTPUT_TOKENS,
     )
 
 

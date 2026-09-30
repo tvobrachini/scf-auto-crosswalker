@@ -10,6 +10,7 @@ from evaluation import (
     build_gold_set,
     canonical_nist,
     comparison_markdown,
+    error_summary,
     first_gold_rank,
     gold_set_stats,
     markdown_to_text,
@@ -181,6 +182,26 @@ def test_score_model_counts_rejected_ids(tmp_path):
     md = results_markdown([], m, None, None)
     assert "| Model | IDs rejected by validation | 3 |" in md
     assert "| Model | Cases with a rejected ID | 2 |" in md
+
+
+def test_error_summary_groups_by_cause_and_drops_urls():
+    cases = [GoldCase(str(i), f"t{i}", {"X-01"}, []) for i in range(3)]
+    tokens = {"t0": 115158, "t1": 114594}
+
+    def suggest(text):
+        if text in tokens:
+            raise RuntimeError(
+                f"402: requested up to {tokens[text]} tokens. "
+                "To increase, visit https://openrouter.ai/workspaces/default/keys/abc123"
+            )
+        raise ValueError("bad schema")
+
+    m = score_model(cases, suggest)
+    summary = error_summary(m)
+    assert [count for count, _ in summary] == [2, 1]
+    assert "openrouter.ai" not in summary[0][1] and "<url>" in summary[0][1]
+    md = results_markdown([], m, None, None)
+    assert md.startswith("**3 of 3 model calls failed;")
 
 
 def test_score_retrieval_keeps_duplicate_case_ids_apart():
