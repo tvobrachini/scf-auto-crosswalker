@@ -19,14 +19,15 @@ Build the Security Hub -> NIST 800-53 -> SCF gold set and score the pipeline.
     # 3. Also score the model step (one OpenRouter call per case)
     uv run python scripts/run_eval.py --gold eval/gold.csv --llm
 
-    # 3b. Same, on an OpenRouter model instead of OpenRouter (needs
-    #     OPENROUTER_API_KEY; langchain-openai is not a project dependency)
-    uv run --with langchain-openai python scripts/run_eval.py \
+    # 3b. Same, on another OpenRouter model than the app's default
+    #     (the same as setting OPENROUTER_MODEL for this run)
+    uv run python scripts/run_eval.py \
         --gold eval/gold.csv --llm --openrouter-model <model id>
 
 Needs the SCF database in data/ and, without --onnx-model, network access to
 Hugging Face for the embedding model. Writes eval/results.md and
-eval/per_case_retrieval.csv (IDs and numbers only); eval/gold.csv holds AWS
+eval/per_case_retrieval.csv (IDs and numbers only), and with --llm
+eval/per_case_model.csv; eval/gold.csv holds AWS
 text and is git-ignored. See eval/README.md for what the numbers mean.
 """
 
@@ -40,8 +41,10 @@ sys.path.append(os.path.join(ROOT, "src"))
 
 from evaluation import (  # noqa: E402
     SMALL_GOLD,
+    Suggestion,
     build_gold_set,
     comparison_markdown,
+    error_summary,
     gold_set_stats,
     nist_800_53_column,
     random_baseline,
@@ -52,6 +55,7 @@ from evaluation import (  # noqa: E402
     tfidf_retriever,
     write_gold_csv,
     write_per_case_csv,
+    write_per_case_model_csv,
 )
 from demo import demo_mode_enabled  # noqa: E402
 from fetch_scf import read_scf_release  # noqa: E402
@@ -67,6 +71,15 @@ from mapper import (  # noqa: E402
 
 EVAL_DIR = os.path.join(ROOT, "eval")
 DEFAULT_KS = (1, 3, 5, 10, 20, CROSSWALK_CANDIDATES)
+
+
+def _suggestion(result) -> Suggestion:
+    """The suggested IDs and the IDs validation rejected, from a MappingResult."""
+    if result is None:
+        return Suggestion([])
+    return Suggestion(
+        [m.control_id for m in result.mappings], list(result.rejected_control_ids)
+    )
 
 
 def use_onnx_model(model_dir: str, allow_unverified: bool = False) -> str:
@@ -94,65 +107,9 @@ def use_onnx_model(model_dir: str, allow_unverified: bool = False) -> str:
     return f"all-MiniLM-L6-v2, ONNX export (model.onnx sha256 {digest})"
 
 
-def use_openrouter_model(model_name: str, api_key: str):
-    """
-    Swap the model step for `model_name` on OpenRouter (an OpenAI-compatible
-    API) instead of OpenRouter. Returns (label, suggest) for the report and for
-    score_model.
-
-    mapper._invoke_chain's own retry only matches OpenRouter's exception classes,
-    so an OpenRouter rate limit or timeout would otherwise raise immediately;
-    `suggest` carries its own retry over the OpenAI SDK's transient errors
-    instead of changing that decorator. Needs langchain-openai, not a project
-    dependency: `uv run --with langchain-openai`, imported dynamically here
-    so it need not resolve for everyone else (as src/onnx_encoder.py does
-    for onnxruntime).
-    """
-    import importlib
-
-    from tenacity import (
-        retry,
-        retry_if_exception_type,
-        stop_after_attempt,
-        wait_exponential,
-    )
-
-    ChatOpenAI = importlib.import_module("langchain_openai").ChatOpenAI
-    openai = importlib.import_module("openai")
-
-    def get_llm():
-        return ChatOpenAI(
-            model=model_name,
-            api_key=api_key,
-            base_url="https://openrouter.ai/api/v1",
-            temperature=0,
-            max_retries=0,
-            default_headers={
-                "HTTP-Referer": "https://github.com/tvobrachini/scf-auto-crosswalker",
-                "X-Title": "SCF Auto-Crosswalker eval",
-            },
-        )
-
-    mapper._get_llm = get_llm
-
-    @retry(
-        wait=wait_exponential(multiplier=1, min=2, max=60),
-        stop=stop_after_attempt(mapper.MAX_ATTEMPTS),
-        retry=retry_if_exception_type(
-            (
-                openai.RateLimitError,
-                openai.APIConnectionError,
-                openai.APITimeoutError,
-                openai.InternalServerError,
-            )
-        ),
-        reraise=True,
-    )
-    def suggest(text: str) -> list[str]:
-        result = map_text_to_scf(text, top_k=3)
-        return [m.control_id for m in result.mappings] if result else []
-
-    return f"{model_name} (OpenRouter)", suggest
+def _suggest(text: str) -> Suggestion:
+    """The full pipeline on one input, through the app's own client and retry."""
+    return _suggestion(map_text_to_scf(text, top_k=3))
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -173,8 +130,8 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument(
         "--openrouter-model",
-        help="score the model step on this OpenRouter model instead of OpenRouter "
-        "(needs OPENROUTER_API_KEY)",
+        help="score the model step on this OpenRouter model instead of the "
+        "app's default (sets OPENROUTER_MODEL for this run)",
     )
     args = parser.parse_args(argv)
 
@@ -237,24 +194,16 @@ def main(argv: list[str] | None = None) -> int:
     model = None
     llm_name = None
     if args.llm:
-        suggest = None
-        if args.openrouter_model:
-            api_key = os.environ.get("OPENROUTER_API_KEY")
-            if not api_key:
-                print("OPENROUTER_API_KEY is not set; skipping the model step.")
-            else:
-                llm_name, suggest = use_openrouter_model(args.openrouter_model, api_key)
-        elif not os.environ.get("OPENROUTER_API_KEY"):
+        if not os.environ.get("OPENROUTER_API_KEY"):
             print("OPENROUTER_API_KEY is not set; skipping the model step.")
         else:
-            llm_name = os.environ.get("OPENROUTER_MODEL", DEFAULT_OPENROUTER_MODEL)
-
-            def suggest(text: str) -> list[str]:
-                result = map_text_to_scf(text, top_k=3)
-                return [m.control_id for m in result.mappings] if result else []
-
-        if suggest is not None:
-            model = score_model(cases, suggest)
+            if args.openrouter_model:
+                os.environ["OPENROUTER_MODEL"] = args.openrouter_model
+            model_id = os.environ.get("OPENROUTER_MODEL", DEFAULT_OPENROUTER_MODEL)
+            llm_name = f"{model_id} (OpenRouter)"
+            model = score_model(cases, _suggest)
+            for count, sample in error_summary(model):
+                print(f"Model call failed for {count} case(s), e.g.: {sample}")
 
     table = results_markdown(retrieval, model, read_scf_release(), column, llm_name)
     sections = [table, f"Embedding model: {embedder}; SCF controls ranked: {len(ids)}"]
@@ -290,8 +239,16 @@ def main(argv: list[str] | None = None) -> int:
         f.write(report)
     per_case = os.path.join(EVAL_DIR, "per_case_retrieval.csv")
     write_per_case_csv(per_case, cases, rankings, len(ids), k_max)
+    saved = [out, per_case]
+    if model is not None:
+        per_case_model = os.path.join(EVAL_DIR, "per_case_model.csv")
+        write_per_case_model_csv(per_case_model, model)
+        saved.append(per_case_model)
     print(report)
-    print(f"Saved to {out} and {per_case}")
+    print("Saved to " + ", ".join(saved))
+    if model is not None and model.errors:
+        print(f"{model.errors} model call(s) failed; do not publish these figures.")
+        return 1
     return 0
 
 
