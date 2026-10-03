@@ -48,13 +48,21 @@ OSCAL_VERSION = "1.2.1"
 SCF_HREF = "https://github.com/securecontrolsframework/securecontrolsframework/releases"
 SECURITY_HUB_HREF = "https://docs.aws.amazon.com/securityhub/latest/userguide/securityhub-controls-reference.html"
 
+NIST_RELATIONSHIP_TO_OSCAL = {
+    "equal": "equal",
+    "subset": "subset-of",
+    "superset": "superset-of",
+    "intersects": "intersects-with",
+    "no_relationship": "no-relationship",
+}
+
 MAPPING_DESCRIPTION = (
-    "Unreviewed suggestions from SCF Auto-Crosswalker: embedding retrieval over the "
-    "SCF, one language-model call, and validation that each target is one of the "
-    "retrieved SCF controls. The relationship is recorded as intersects-with, the "
-    "weakest positive relationship in NIST IR 8477, because the tool does not "
-    "determine subset, superset or equality. Confidence scores are the model's own "
-    "and are not calibrated. A person must review every map before relying on it."
+    "Suggestions from SCF Auto-Crosswalker: embedding retrieval over the SCF, "
+    "language-model mapping with NIST IR 8477 set-theory relationship classification "
+    "(equal, subset-of, superset-of, intersects-with, no-relationship), dual-clause quote extraction "
+    "from input requirement and SCF control, and validation that each target is one of the "
+    "retrieved SCF controls. Confidence scores are the model's own and are not calibrated. "
+    "A person must review every map before relying on it."
 )
 
 
@@ -97,6 +105,9 @@ def oscal_mapping_collection(
             if current is None or m.confidence > current["confidence"]:
                 groups[kind][key] = {
                     "confidence": m.confidence,
+                    "relationship": getattr(m, "relationship", "intersects"),
+                    "source_quote": getattr(m, "source_quote", ""),
+                    "control_quote": getattr(m, "control_quote", ""),
                     "justification": m.justification,
                     "label": r.input.label,
                 }
@@ -149,14 +160,23 @@ def oscal_mapping_collection(
             continue
         maps = []
         for (source_ref, target_id), info in pairs.items():
+            oscal_rel = NIST_RELATIONSHIP_TO_OSCAL.get(
+                info.get("relationship", "intersects"), "intersects-with"
+            )
+            remarks_parts = [f"{info['label']}: {info['justification']}"]
+            if info.get("source_quote"):
+                remarks_parts.append(f'Source clause: "{info["source_quote"]}"')
+            if info.get("control_quote"):
+                remarks_parts.append(f'Control clause: "{info["control_quote"]}"')
+
             maps.append(
                 {
                     "uuid": str(uuid.uuid4()),
-                    "relationship": "intersects-with",
+                    "relationship": oscal_rel,
                     "sources": [{"type": kind, "id-ref": source_ref}],
                     "targets": [{"type": "control", "id-ref": target_id}],
                     "confidence-score": {"percentage": info["confidence"] / 100},
-                    "remarks": f"{info['label']}: {info['justification']}",
+                    "remarks": " | ".join(remarks_parts),
                 }
             )
         source_type, source_resource = resources[kind]

@@ -223,6 +223,20 @@ def render(labels: Labels, lab_data_dir: str) -> None:
                     st.markdown(
                         f"**Control Description ({labels.catalog_label}):** {md_escape(m.description)}"
                     )
+                    rel_str = (
+                        getattr(m, "relationship", "intersects")
+                        .replace("_", " ")
+                        .title()
+                    )
+                    st.markdown(f"**NIST IR 8477 Relationship:** `{rel_str}`")
+                    if getattr(m, "source_quote", ""):
+                        st.markdown(
+                            f'**Source Clause:** *"{md_escape(m.source_quote)}"*'
+                        )
+                    if getattr(m, "control_quote", ""):
+                        st.markdown(
+                            f'**Control Clause:** *"{md_escape(m.control_quote)}"*'
+                        )
                     st.markdown(
                         f"**Model Justification:** {md_escape(m.justification)}"
                     )
