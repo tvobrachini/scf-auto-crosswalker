@@ -89,6 +89,11 @@ def detail_rows(results: list[CrosswalkResult]) -> list[dict]:
                     "SCF Control ID": m.control_id,
                     "SCF Domain": m.domain,
                     "Control Description": m.description,
+                    "NIST IR 8477 Relationship": getattr(
+                        m, "relationship", "intersects"
+                    ),
+                    "Source Clause": getattr(m, "source_quote", ""),
+                    "Control Clause": getattr(m, "control_quote", ""),
                     "Model Confidence (%)": m.confidence,
                     "Model Justification": m.justification,
                 }
