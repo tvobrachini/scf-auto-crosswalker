@@ -7,6 +7,7 @@ from fetch_scf import (
     download_scf,
     parse_scf,
     read_scf_release,
+    read_scf_skipped,
     setup_directories,
 )
 from mapper import clear_scf_cache
@@ -59,6 +60,13 @@ def render_sidebar() -> str:
         if os.path.exists(PARSED_JSON_FILE):
             release = read_scf_release()
             st.write(f"**SCF Database:** 🟢 {release or 'Ready'}")
+            skipped = read_scf_skipped()
+            if skipped:
+                st.warning(
+                    f"{skipped} SCF row(s) failed validation and are missing from the "
+                    "database, so gap analysis may report gaps that are not real. "
+                    "See the log."
+                )
         else:
             st.write("**SCF Database:** 🔴 Not downloaded")
 
