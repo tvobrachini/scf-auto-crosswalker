@@ -200,6 +200,13 @@ class MappingResult(BaseModel):
         default_factory=list,
         description="Valid IDs the model returned beyond top_k, which are not shown.",
     )
+    unverified_quotes: list[str] = Field(
+        default_factory=list,
+        description=(
+            "'ID:source' or 'ID:control' for each quote the model gave that is not "
+            "a verbatim excerpt of the input or of the SCF text. Those quotes are blanked."
+        ),
+    )
 
 
 class ScopeAnalysis(BaseModel):
@@ -400,8 +407,20 @@ def _normalize_control_id(control_id: str) -> str:
     return control_id.strip().strip("[]").strip().upper()
 
 
+def _quote_in(quote: str, text: str) -> bool:
+    """True if `quote` is a substring of `text`, ignoring case and whitespace runs."""
+
+    def norm(value: str) -> str:
+        return " ".join(value.split()).casefold()
+
+    return norm(quote) in norm(text)
+
+
 def _validate_mapping_result(
-    result: MappingResult, allowed: dict[str, dict], top_k: int | None = None
+    result: MappingResult,
+    allowed: dict[str, dict],
+    top_k: int | None = None,
+    source_text: str | None = None,
 ) -> MappingResult:
     """
     Post-LLM validation.
@@ -414,8 +433,12 @@ def _validate_mapping_result(
       (the rest are recorded in capped_control_ids).
     - Replaces domain, description and regulations with the database values,
       so no control text shown to the user is written by the model.
+    - Blanks a source or control quote that is not a verbatim excerpt of the
+      input (when `source_text` is given) or of the SCF description, and
+      records it in unverified_quotes.
     """
     valid_mappings = []
+    unverified = list(result.unverified_quotes)
     rejected = list(result.rejected_control_ids)
     seen: set[str] = set()
     for m in result.mappings:
@@ -440,6 +463,16 @@ def _validate_mapping_result(
         )
         m.source_quote = (getattr(m, "source_quote", "") or "").strip()
         m.control_quote = (getattr(m, "control_quote", "") or "").strip()
+        if (
+            m.source_quote
+            and source_text is not None
+            and not _quote_in(m.source_quote, source_text)
+        ):
+            unverified.append(f"{cid}:source")
+            m.source_quote = ""
+        if m.control_quote and not _quote_in(m.control_quote, m.description):
+            unverified.append(f"{cid}:control")
+            m.control_quote = ""
         valid_mappings.append(m)
 
     if top_k is not None:
@@ -447,6 +480,7 @@ def _validate_mapping_result(
         valid_mappings = valid_mappings[:top_k]
     result.mappings = valid_mappings
     result.rejected_control_ids = rejected
+    result.unverified_quotes = unverified
     return result
 
 
@@ -573,7 +607,9 @@ def map_text_to_scf(input_text: str, top_k: int = 3) -> MappingResult | None:
     )
 
     allowed = {c["control_id"]: c for c in candidates}
-    return _validate_mapping_result(response, allowed, top_k=top_k)
+    return _validate_mapping_result(
+        response, allowed, top_k=top_k, source_text=input_text
+    )
 
 
 def _validate_scope_recommendation(
