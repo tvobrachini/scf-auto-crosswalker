@@ -232,6 +232,14 @@ def _load_scf_file(path: str, mtime: float) -> list[dict]:
         return json.load(f)
 
 
+_db_problem: str | None = None
+
+
+def scf_database_problem() -> str:
+    """Why the last load_scf_database() returned nothing, in words for the user."""
+    return _db_problem or "SCF database not found. Download it using the sidebar."
+
+
 def load_scf_database() -> list[dict]:
     """
     The parsed SCF database, or [] when it is missing or unreadable.
@@ -242,6 +250,8 @@ def load_scf_database() -> list[dict]:
 
     In DEMO_MODE it is the synthetic demo catalog instead (see src/demo.py).
     """
+    global _db_problem
+    _db_problem = None
     if demo_mode_enabled():
         return DEMO_CATALOG
     try:
@@ -253,6 +263,10 @@ def load_scf_database() -> list[dict]:
         return _load_scf_file(PARSED_JSON_FILE, mtime)
     except (OSError, ValueError) as e:
         logger.error("SCF database at %s is unreadable: %s", PARSED_JSON_FILE, e)
+        _db_problem = (
+            f"The SCF database file exists but cannot be read ({type(e).__name__}). "
+            "Download it again using the sidebar."
+        )
         return []
 
 
@@ -353,7 +367,10 @@ def _build_or_load_embeddings(scf_data: list[dict]) -> np.ndarray:
     )
     model = _get_embedding_model()
     embeddings = model.encode(texts, show_progress_bar=False, convert_to_numpy=True)
-    _write_embeddings_cache(embeddings, fingerprint)
+    try:
+        _write_embeddings_cache(embeddings, fingerprint)
+    except OSError as e:  # the embeddings are in memory; only the cache is lost
+        logger.warning("Could not write the embeddings cache: %s", e)
     _embeddings_memo.clear()
     _embeddings_memo[fingerprint] = embeddings
     return embeddings
