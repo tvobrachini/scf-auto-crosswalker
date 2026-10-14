@@ -10,6 +10,7 @@ from crosswalk import (
     CrosswalkInput,
     aggregate,
     all_rejected,
+    all_unverified,
     detail_rows,
     run_crosswalk,
     unique_model_calls,
@@ -29,6 +30,7 @@ from ui.common import (
     md_escape,
     render_regulations,
     render_rejected,
+    render_unverified_quotes,
     resolve_lab_file,
     show_if_current,
 )
@@ -203,6 +205,7 @@ def render(labels: Labels, lab_data_dir: str) -> None:
         if not state["is_batch"]:
             [r] = results
             render_rejected(r.rejected, labels.catalog_short)
+            render_unverified_quotes(r.unverified_quotes)
             if r.capped:
                 st.caption(
                     f"The model also suggested {md_escape(', '.join(r.capped))}, "
@@ -245,6 +248,7 @@ def render(labels: Labels, lab_data_dir: str) -> None:
         else:
             summary = aggregate(results, scf_dict)
             render_rejected(all_rejected(results), labels.catalog_short)
+            render_unverified_quotes(all_unverified(results))
             st.success("Batch mapping complete.")
             st.markdown(f"### 🎯 {len(summary)} Suggested Controls")
             st.info(
