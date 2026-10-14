@@ -157,6 +157,13 @@ def test_llm_client_has_no_retries_of_its_own(monkeypatch):
     assert mapper._get_llm().max_retries == 0
 
 
+def test_llm_client_caps_output_tokens(monkeypatch):
+    # Uncapped, OpenRouter reserves the whole context for the reply and
+    # refuses the call (402) on a small balance.
+    monkeypatch.setenv("OPENROUTER_API_KEY", "test-key")
+    assert mapper._get_llm().max_tokens == mapper.MAX_OUTPUT_TOKENS
+
+
 def test_map_text_returns_none_without_database(monkeypatch):
     monkeypatch.setattr(mapper, "load_scf_database", lambda: [])
     assert mapper.map_text_to_scf("anything") is None

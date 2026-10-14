@@ -21,7 +21,7 @@ SCF release: SCF 2026.3; 800-53 column: NIST 800-53 R5.2; cases: 221
 | Retrieval | Mean recall @50 | 21.7% |
 | Retrieval | MRR @50 | 0.188 |
 
-Embedding model: all-MiniLM-L6-v2, ONNX export (model.onnx sha256 4f148ba8ae9c2c7fbee4af2b132db8d06c6a6545b47fc83bbb98c3d22b8393e6); SCF controls ranked: 1591
+Embedding model: all-MiniLM-L6-v2 (sentence-transformers); SCF controls ranked: 1591
 
 ## Gold set
 

@@ -6,9 +6,11 @@ import pytest
 
 from evaluation import (
     GoldCase,
+    Suggestion,
     build_gold_set,
     canonical_nist,
     comparison_markdown,
+    error_summary,
     first_gold_rank,
     gold_set_stats,
     markdown_to_text,
@@ -26,6 +28,7 @@ from evaluation import (
     tfidf_retriever,
     write_gold_csv,
     write_per_case_csv,
+    write_per_case_model_csv,
 )
 
 COL = "NIST SP 800-53 R5"
@@ -150,8 +153,55 @@ def test_score_model_survives_failing_calls():
 
     m = score_model(cases, suggest)
     assert m.errors == 1
+    assert m.per_case[0].error == "RuntimeError: 429 after retries"
     assert m.hit_rate == 0.5
     assert m.precision == 1.0
+
+
+def test_score_model_counts_rejected_ids(tmp_path):
+    cases = [
+        GoldCase("a", "ta", {"X-01"}, []),
+        GoldCase("b", "tb", {"Y-01"}, []),
+        GoldCase("c", "tc", {"Z-01"}, []),
+    ]
+    answers = {
+        "ta": Suggestion(["X-01"], ["AC-1", "SC-8"]),
+        "tb": Suggestion([], ["NOPE-99"]),  # every ID rejected: an empty case
+        "tc": ["Z-01"],  # a plain list still works
+    }
+    m = score_model(cases, lambda t: answers[t])
+    assert (m.rejected, m.cases_with_rejections, m.empty) == (3, 2, 1)
+    assert m.precision == 1.0
+    assert m.hit_rate == pytest.approx(2 / 3)
+
+    path = tmp_path / "per_case_model.csv"
+    write_per_case_model_csv(str(path), m)
+    rows = list(csv.DictReader(path.open(encoding="utf-8")))
+    assert [r["rejected"] for r in rows] == ["AC-1 SC-8", "NOPE-99", ""]
+    assert [r["n_gold_suggested"] for r in rows] == ["1", "0", "1"]
+    md = results_markdown([], m, None, None)
+    assert "| Model | IDs rejected by validation | 3 |" in md
+    assert "| Model | Cases with a rejected ID | 2 |" in md
+
+
+def test_error_summary_groups_by_cause_and_drops_urls():
+    cases = [GoldCase(str(i), f"t{i}", {"X-01"}, []) for i in range(3)]
+    tokens = {"t0": 115158, "t1": 114594}
+
+    def suggest(text):
+        if text in tokens:
+            raise RuntimeError(
+                f"402: requested up to {tokens[text]} tokens. "
+                "To increase, visit https://openrouter.ai/workspaces/default/keys/abc123"
+            )
+        raise ValueError("bad schema")
+
+    m = score_model(cases, suggest)
+    summary = error_summary(m)
+    assert [count for count, _ in summary] == [2, 1]
+    assert "openrouter.ai" not in summary[0][1] and "<url>" in summary[0][1]
+    md = results_markdown([], m, None, None)
+    assert md.startswith("**3 of 3 model calls failed;")
 
 
 def test_score_retrieval_keeps_duplicate_case_ids_apart():
@@ -234,7 +284,7 @@ def test_run_eval_cli_end_to_end(monkeypatch, tmp_path, fake_embeddings):
 
 
 def test_run_eval_cli_openrouter_model(monkeypatch, tmp_path, fake_embeddings):
-    """--llm --openrouter-model scores via use_openrouter_model, not the default."""
+    """--llm --openrouter-model runs the app's pipeline on that model."""
     import importlib.util
     import os
 
@@ -267,16 +317,22 @@ def test_run_eval_cli_openrouter_model(monkeypatch, tmp_path, fake_embeddings):
     results = (tmp_path / "results.md").read_text()
     assert "| Model" not in results  # skipped: no OPENROUTER_API_KEY
 
-    def fake_use_openrouter_model(model_name, api_key):
-        assert model_name == "openrouter/some-model"
-        assert api_key == "fake-openrouter-key"  # pragma: allowlist secret
+    from mapper import MappedControl, MappingResult
 
-        def suggest(text: str) -> list[str]:
-            return ["CRY-01"]
+    seen_models = []
 
-        return f"{model_name} (OpenRouter)", suggest
+    def fake_map_text_to_scf(text, top_k=3):
+        # The app's own pipeline is called, with the model set for this run.
+        seen_models.append(os.environ.get("OPENROUTER_MODEL"))
+        return MappingResult(
+            mappings=[
+                MappedControl(control_id="CRY-01", confidence=90, justification="j")
+            ],
+            rejected_control_ids=["SC-8"],
+        )
 
-    monkeypatch.setattr(run_eval, "use_openrouter_model", fake_use_openrouter_model)
+    monkeypatch.setattr(run_eval, "map_text_to_scf", fake_map_text_to_scf)
+    monkeypatch.delenv("OPENROUTER_MODEL", raising=False)
     monkeypatch.setenv("OPENROUTER_API_KEY", "fake-openrouter-key")
     assert (
         run_eval.main(
@@ -290,51 +346,13 @@ def test_run_eval_cli_openrouter_model(monkeypatch, tmp_path, fake_embeddings):
         )
         == 0
     )
+    assert seen_models == ["openrouter/some-model"]
     results = (tmp_path / "results.md").read_text()
     assert "Model (openrouter/some-model (OpenRouter))" in results
     assert "Precision of suggestions | 100.0%" in results
-
-
-def test_use_openrouter_model_swaps_llm_and_wraps_retry(monkeypatch):
-    """Real wiring: mapper._get_llm returns a ChatOpenAI, suggest retries
-    the OpenAI SDK's transient errors. No network call is made.
-
-    Skipped unless langchain-openai is installed (`uv run --with
-    langchain-openai pytest`), since it is not a project dependency.
-    """
-    pytest.importorskip("langchain_openai")
-    import importlib.util
-    import os
-
-    import mapper
-
-    spec = importlib.util.spec_from_file_location(
-        "run_eval",
-        os.path.join(
-            os.path.dirname(os.path.dirname(__file__)), "scripts", "run_eval.py"
-        ),
-    )
-    run_eval = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(run_eval)
-
-    label, suggest = run_eval.use_openrouter_model(
-        "openrouter/some-model", "fake-openrouter-key"
-    )
-    assert label == "openrouter/some-model (OpenRouter)"
-
-    llm = mapper._get_llm()
-    assert type(llm).__name__ == "ChatOpenAI"
-    assert llm.model_name == "openrouter/some-model"
-    assert str(llm.openai_api_base) == "https://openrouter.ai/api/v1"
-
-    import openai
-
-    assert suggest.retry.retry.exception_types == (
-        openai.RateLimitError,
-        openai.APIConnectionError,
-        openai.APITimeoutError,
-        openai.InternalServerError,
-    )
+    assert "IDs rejected by validation | 1 |" in results
+    per_case = (tmp_path / "per_case_model.csv").read_text(encoding="utf-8")
+    assert per_case.splitlines()[1] == "CloudFront.3,CRY-01,1,SC-8,0,"
 
 
 def test_run_eval_refuses_demo_mode(monkeypatch, tmp_path):
@@ -592,3 +610,26 @@ def test_comparison_markdown_and_per_case_csv(tmp_path):
         "random_hit_probability_at_2": "0.0200",
     }
     assert rows[1]["first_gold_rank_emb"] == ""
+
+
+def test_run_eval_suggestion_keeps_rejected_ids():
+    import importlib.util
+    import os
+
+    from mapper import MappedControl, MappingResult
+
+    spec = importlib.util.spec_from_file_location(
+        "run_eval",
+        os.path.join(
+            os.path.dirname(os.path.dirname(__file__)), "scripts", "run_eval.py"
+        ),
+    )
+    run_eval = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(run_eval)
+
+    result = MappingResult(
+        mappings=[MappedControl(control_id="CRY-03", confidence=80, justification="j")],
+        rejected_control_ids=["SC-8"],
+    )
+    assert run_eval._suggestion(result) == Suggestion(["CRY-03"], ["SC-8"])
+    assert run_eval._suggestion(None) == Suggestion([])
