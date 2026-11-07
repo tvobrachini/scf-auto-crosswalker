@@ -17,7 +17,7 @@ from crosswalk import (
 from exports import oscal_mapping_collection, to_safe_csv
 from fetch_scf import read_scf_release
 from findings import finding_control_id, finding_to_text, is_securityhub_export
-from mapper import load_scf_database, map_text_to_scf
+from mapper import load_scf_database, map_text_to_scf, scf_database_problem
 from ui.common import (
     MAX_PDF_PAGES,
     Labels,
@@ -170,7 +170,7 @@ def render(labels: Labels, lab_data_dir: str) -> None:
         elif not labels.demo_mode and not os.environ.get("OPENROUTER_API_KEY"):
             st.error("No OPENROUTER_API_KEY found in .env.")
         elif not scf_db:
-            st.error("SCF database not found or empty. Use the sidebar to download it.")
+            st.error(scf_database_problem())
         else:
             calls = unique_model_calls(inputs)
             progress_bar = st.progress(0)
