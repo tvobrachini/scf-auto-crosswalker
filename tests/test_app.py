@@ -152,6 +152,23 @@ def test_crosswalker_batch_success(fake_model):
     assert "📥 Download Ranked Summary (CSV)" in _download_labels(at)
 
 
+def test_crosswalker_says_which_input_is_used_when_several_are_set(fake_model):
+    at = _app("🔍 SCF Auto-Crosswalker")
+    at.text_area[0].set_value("Require HTTPS encrypt in transit")
+    at.selectbox(key="cw_lab").set_value("aws_securityhub_finding.json").run()
+    assert not at.exception
+    notes = " ".join(w.value for w in at.warning)
+    assert "More than one input is set" in notes
+    assert "ignoring pasted text" in notes
+    assert "aws\\_securityhub\\_finding\\.json" in notes
+
+
+def test_crosswalker_no_warning_for_a_single_input(fake_model):
+    at = _app("🔍 SCF Auto-Crosswalker")
+    at.text_area[0].set_value("Require HTTPS encrypt in transit").run()
+    assert not any("More than one input" in w.value for w in at.warning)
+
+
 def test_scope_analyzer_success(fake_model):
     at = _app("🎯 Audit Scope Analyzer")
     at.text_area[0].set_value("Verify encryption at rest and MFA.").run()

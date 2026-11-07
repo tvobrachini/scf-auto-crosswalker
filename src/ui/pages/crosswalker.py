@@ -49,6 +49,12 @@ def render(labels: Labels, lab_data_dir: str) -> None:
     input_text = ""
     single_source_id = None
     batch_findings: list = []
+    ignored: list[str] = []
+
+    up_label = "Input"
+    up_text = ""
+    up_source_id = None
+    up_batch: list = []
 
     with tab1:
         st.markdown("### Paste Policy or Requirement")
@@ -93,10 +99,13 @@ def render(labels: Labels, lab_data_dir: str) -> None:
                         with st.expander("View Lab File Contents"):
                             st.code(input_text)
 
-        if text_input.strip() and not batch_findings:
-            input_text = text_input
-            input_label = "Pasted text"
-            single_source_id = None
+        if text_input.strip():
+            if batch_findings or input_text.strip():
+                ignored = ["pasted text"]
+            else:
+                input_text = text_input
+                input_label = "Pasted text"
+                single_source_id = None
 
     with tab2:
         st.markdown("### Upload Raw Documents")
@@ -108,34 +117,53 @@ def render(labels: Labels, lab_data_dir: str) -> None:
             try:
                 if uploaded_file.name.endswith(".pdf"):
                     with st.spinner("Extracting text from the PDF..."):
-                        input_text, page_count, cut = extract_pdf_text(uploaded_file)
+                        up_text, page_count, cut = extract_pdf_text(uploaded_file)
                     st.success(f"Extracted text from {page_count} PDF pages.")
                     if cut:
                         st.warning(f"Only the first {MAX_PDF_PAGES} pages are used.")
                 elif uploaded_file.name.endswith(".json"):
                     data = json.load(uploaded_file)
                     if is_securityhub_export(data):
-                        batch_findings = data["Findings"]
+                        up_batch = data["Findings"]
                         st.success(
-                            f"Batch mode: loaded {len(batch_findings)} Security Hub findings."
+                            f"Batch mode: loaded {len(up_batch)} Security Hub findings."
                         )
                     else:
-                        input_text = finding_to_text(data)
-                        single_source_id = finding_control_id(data)
+                        up_text = finding_to_text(data)
+                        up_source_id = finding_control_id(data)
                         st.success("Loaded a single JSON finding.")
                 else:
                     try:
-                        input_text = uploaded_file.getvalue().decode("utf-8")
+                        up_text = uploaded_file.getvalue().decode("utf-8")
                     except UnicodeDecodeError:
                         st.error(
                             "File encoding not supported. Please upload a UTF-8 encoded file."
                         )
-                        input_text = ""
+                        up_text = ""
                     else:
                         st.success("Loaded the text file.")
-                input_label = uploaded_file.name
+                up_label = uploaded_file.name
             except Exception as e:
                 st.error(f"Error reading file: {e}")
+
+    # One input is used, never a mix. An upload wins over the lab sample and
+    # pasted text, and the page says what was set aside, so a result is never
+    # attributed to evidence other than the one shown as used.
+    if up_batch or up_text.strip():
+        if batch_findings or input_text.strip():
+            ignored.append(input_label if not batch_findings else "the lab batch")
+        batch_findings, input_text = up_batch, up_text
+        input_label, single_source_id = up_label, up_source_id
+    if ignored:
+        used = (
+            f"{len(batch_findings)} findings from {input_label}"
+            if (batch_findings)
+            else input_label
+        )
+        st.warning(
+            f"More than one input is set. Using **{md_escape(used)}**; "
+            f"ignoring {md_escape(', '.join(ignored))}. Clear the others to avoid confusion."
+        )
 
     st.markdown("---")
 
