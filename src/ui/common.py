@@ -160,6 +160,15 @@ def render_rejected(rejected: list[str], catalog_short: str, what: str = "IDs") 
         )
 
 
+def render_unverified_quotes(unverified: list[str]) -> None:
+    if unverified:
+        st.warning(
+            "Some quotes the model gave were not found in the input or in the SCF "
+            "text, so they were removed (control ID, then which quote): "
+            + ", ".join(md_escape(u) for u in unverified)
+        )
+
+
 def findings_to_inputs(findings: list) -> list[CrosswalkInput]:
     inputs = []
     for i, finding in enumerate(findings, start=1):

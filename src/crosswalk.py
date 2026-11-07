@@ -25,6 +25,7 @@ class CrosswalkResult:
     mappings: list[MappedControl] = field(default_factory=list)
     rejected: list[str] = field(default_factory=list)
     capped: list[str] = field(default_factory=list)
+    unverified_quotes: list[str] = field(default_factory=list)
     error: str | None = None
 
 
@@ -56,6 +57,7 @@ def run_crosswalk(
                     cached.mappings = list(mapped.mappings)
                     cached.rejected = list(mapped.rejected_control_ids)
                     cached.capped = list(mapped.capped_control_ids)
+                    cached.unverified_quotes = list(mapped.unverified_quotes)
             except Exception as e:  # reported per input in the UI
                 cached.error = f"{type(e).__name__}: {e}"
             by_text[item.text] = cached
@@ -65,6 +67,7 @@ def run_crosswalk(
                 mappings=cached.mappings,
                 rejected=cached.rejected,
                 capped=cached.capped,
+                unverified_quotes=cached.unverified_quotes,
                 error=cached.error,
             )
         )
@@ -149,6 +152,11 @@ def aggregate(results: list[CrosswalkResult], scf_dict: dict[str, dict]) -> list
         rows.append(row)
     rows.sort(key=lambda r: (-r["Priority Score"], r["SCF Control ID"]))
     return rows
+
+
+def all_unverified(results: list[CrosswalkResult]) -> list[str]:
+    """Every 'ID:source' / 'ID:control' quote the model made up, once each."""
+    return list(dict.fromkeys(q for r in results for q in r.unverified_quotes))
 
 
 def all_rejected(results: list[CrosswalkResult]) -> list[str]:
