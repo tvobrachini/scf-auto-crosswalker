@@ -382,10 +382,14 @@ def _mapping_payload(candidates: list[tuple[str, str]], user: str) -> dict:
     match = _TOP_K.search(user)
     top_k = int(match.group(1)) if match else 3
     picks = candidates[: min(top_k, len(_CONFIDENCES))]
+    _demo_relationships = ("subset", "intersects", "equal", "superset")
     mappings = [
         {
             "control_id": cid,
             "confidence": _CONFIDENCES[rank],
+            "relationship": _demo_relationships[rank % len(_demo_relationships)],
+            "source_quote": "DEMO: Requirement clause from input",
+            "control_quote": f"DEMO: Control clause from {cid}",
             "justification": (
                 f"DEMO OUTPUT (canned model, no LLM): rank {rank + 1} of "
                 f"{len(candidates)} candidates by local demo retrieval similarity."
@@ -397,6 +401,9 @@ def _mapping_payload(candidates: list[tuple[str, str]], user: str) -> dict:
         {
             "control_id": DEMO_REJECTED_ID,
             "confidence": 90,
+            "relationship": "intersects",
+            "source_quote": "DEMO: Requirement clause from input",
+            "control_quote": "DEMO: Rejected candidate control clause",
             "justification": (
                 "DEMO OUTPUT: a NIST SP 800-53 ID returned on purpose, so validation "
                 "can be seen rejecting an ID that was not among the candidates."
