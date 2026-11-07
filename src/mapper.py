@@ -45,12 +45,12 @@ _EMBEDDING_MODEL_NAME = "all-MiniLM-L6-v2"
 # control is scored by its best-matching chunk.
 _CHUNK_WORDS = 150
 
-# Candidates retrieved for each tool; the model may only choose from these.
 # Longest input sent to the model, in characters (about 15k tokens). A longer
 # one is refused rather than cut, so a result never silently ignores the end
 # of the document.
 MAX_INPUT_CHARS = 60_000
 
+# Candidates retrieved for each tool; the model may only choose from these.
 CROSSWALK_CANDIDATES = 50
 SCOPE_CANDIDATES = 60
 SCOPE_MAX_CONTROLS = 10
@@ -245,12 +245,25 @@ def _load_scf_file(path: str, mtime: float) -> list[dict]:
         return json.load(f)
 
 
-_db_problem: str | None = None
-
-
 def scf_database_problem() -> str:
-    """Why the last load_scf_database() returned nothing, in words for the user."""
-    return _db_problem or "SCF database not found. Download it using the sidebar."
+    """
+    Why load_scf_database() returns nothing, in words for the user.
+
+    Worked out from the file on each call rather than kept in module state,
+    which Streamlit sessions share, so one session never shows another's error.
+    """
+    try:
+        mtime = os.path.getmtime(PARSED_JSON_FILE)
+    except OSError:
+        return "SCF database not found. Download it using the sidebar."
+    try:
+        _load_scf_file(PARSED_JSON_FILE, mtime)
+    except (OSError, ValueError) as e:
+        return (
+            f"The SCF database file exists but cannot be read ({type(e).__name__}). "
+            "Download it again using the sidebar."
+        )
+    return "The SCF database is empty. Download it again using the sidebar."
 
 
 def load_scf_database() -> list[dict]:
@@ -263,8 +276,6 @@ def load_scf_database() -> list[dict]:
 
     In DEMO_MODE it is the synthetic demo catalog instead (see src/demo.py).
     """
-    global _db_problem
-    _db_problem = None
     if demo_mode_enabled():
         return DEMO_CATALOG
     try:
@@ -276,10 +287,6 @@ def load_scf_database() -> list[dict]:
         return _load_scf_file(PARSED_JSON_FILE, mtime)
     except (OSError, ValueError) as e:
         logger.error("SCF database at %s is unreadable: %s", PARSED_JSON_FILE, e)
-        _db_problem = (
-            f"The SCF database file exists but cannot be read ({type(e).__name__}). "
-            "Download it again using the sidebar."
-        )
         return []
 
 
@@ -571,7 +578,7 @@ class InputTooLongError(ValueError):
     """The input is longer than MAX_INPUT_CHARS."""
 
 
-_UNTRUSTED_TAG = re.compile(r"</?\s*untrusted_input\s*>", re.IGNORECASE)
+_UNTRUSTED_TAG = re.compile(r"<\s*/?\s*untrusted_input\s*>", re.IGNORECASE)
 
 
 def _untrusted(text: str) -> str:
