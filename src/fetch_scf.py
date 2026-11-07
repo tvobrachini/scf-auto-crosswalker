@@ -113,6 +113,16 @@ def _write_meta(meta: dict) -> None:
         logger.warning("Could not record SCF release metadata: %s", e)
 
 
+def read_scf_skipped(meta_file: str | None = None) -> int:
+    """How many SCF rows the last parse dropped for failing validation (0 if unknown)."""
+    try:
+        with open(meta_file or META_JSON_FILE, "r", encoding="utf-8") as f:
+            skipped = json.load(f).get("skipped", 0)
+    except (OSError, ValueError, AttributeError):
+        return 0
+    return skipped if isinstance(skipped, int) and skipped > 0 else 0
+
+
 def read_scf_release(meta_file: str | None = None) -> str | None:
     """The SCF release the local database was parsed from (its sheet name, e.g. "SCF 2025.4")."""
     try:
@@ -237,6 +247,7 @@ def parse_scf():
 
         # Convert to dictionary format
         records = []
+        skipped = 0
         for _, row in cleaned_df.iterrows():
             weight_val = (
                 row[weight_col] if weight_col and pd.notna(row[weight_col]) else 1
@@ -285,6 +296,7 @@ def parse_scf():
                     record.get("control_id", "UNKNOWN"),
                     validation_err,
                 )
+                skipped += 1
                 continue
 
             records.append(record)
@@ -308,7 +320,15 @@ def parse_scf():
 
         logger.info("Successfully parsed %d controls.", len(records))
         logger.info("Saved lightweight AI database to %s", PARSED_JSON_FILE)
-        _write_meta({"release": target_sheet, "controls": len(records)})
+        if skipped:
+            logger.warning(
+                "%d control(s) were skipped; the database has %d.",
+                skipped,
+                len(records),
+            )
+        _write_meta(
+            {"release": target_sheet, "controls": len(records), "skipped": skipped}
+        )
         return True
 
     except Exception as e:
