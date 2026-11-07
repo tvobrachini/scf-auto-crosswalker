@@ -141,6 +141,18 @@ def test_crosswalker_single_input_success(fake_model):
     assert any("CRY-03" in e.label for e in at.expander)
 
 
+def test_crosswalker_warns_about_quotes_it_removed(fake_model):
+    fake_model.payload["mappings"][0]["source_quote"] = "words the input never had"
+    fake_model.payload["mappings"][0]["control_quote"] = "encrypt data in transit"
+    at = _app("🔍 SCF Auto-Crosswalker")
+    at.text_area[0].set_value("Require HTTPS encrypt in transit").run()
+    at.button(key="cw_btn").click().run()
+    assert not at.exception
+    notes = " ".join(w.value for w in at.warning)
+    assert "CRY\\-03\\:source" in notes
+    assert "CRY\\-03\\:control" not in notes  # that quote is in the SCF text
+
+
 def test_crosswalker_batch_success(fake_model):
     at = _app("🔍 SCF Auto-Crosswalker")
     at.selectbox(key="cw_lab").set_value("aws_securityhub_finding.json").run()
