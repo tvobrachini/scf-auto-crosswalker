@@ -13,7 +13,7 @@ classifiers = [
     "Programming Language :: Python :: 3.13",
 ]
 dependencies = [
-    "pandas>=2.2.3,<3",
+    "pandas>=2.2.3,<4",
     "openpyxl>=3.1.2",
     "requests>=2.33.0,<3",
     "streamlit>=1.64.0,<2",
