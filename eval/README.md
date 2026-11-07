@@ -42,13 +42,13 @@ uv run --with onnxruntime python scripts/run_eval.py \
 # 3. Score the model step too: one OpenRouter call per case.
 uv run python scripts/run_eval.py --gold eval/gold.csv --llm
 
-# 3b. Or on an OpenRouter model instead of OpenRouter (needs OPENROUTER_API_KEY;
-#     langchain-openai is not a project dependency, only used for this).
-uv run --with langchain-openai python scripts/run_eval.py \
+# 3b. Or on another OpenRouter model than the app's default (the same as
+#     setting OPENROUTER_MODEL for this run; same client, same retries).
+uv run python scripts/run_eval.py \
     --gold eval/gold.csv --llm --openrouter-model <model id>
 ```
 
-The report is written to `eval/results.md` and the per-case ranks to `eval/per_case_retrieval.csv`. Both hold only IDs and numbers. `eval/gold.csv` and the control files hold AWS documentation text (CC BY-SA 4.0) and are not committed.
+The report is written to `eval/results.md`, the per-case ranks to `eval/per_case_retrieval.csv` and, with `--llm`, each case's suggested and rejected IDs to `eval/per_case_model.csv`. All three hold only IDs and numbers. `eval/gold.csv` and the control files hold AWS documentation text (CC BY-SA 4.0) and are not committed.
 
 ## Metrics
 
@@ -63,6 +63,8 @@ The report is written to `eval/results.md` and the per-case ranks to `eval/per_c
 | Model | Hit rate | Share of cases with at least one gold suggestion. |
 | Model | Cases with no suggestion | Cases where the pipeline suggested nothing: the model returned no IDs, or every ID it returned was rejected. |
 | Model | Cases where the call failed | Cases where the OpenRouter call failed after retries. They are skipped, not retried, and count as misses in the hit rate. |
+| Model | IDs rejected by validation | IDs the model returned that are not SCF controls or were not among its candidates. Validation drops them before anything is shown; this counts what it caught. |
+| Model | Cases with a rejected ID | Cases where validation dropped at least one ID. |
 
 ## Results
 
@@ -128,7 +130,7 @@ The generated report is [`results.md`](results.md); per-case ranks (control ID, 
 **What the numbers show**
 
 - At k = 50, the shortlist the model sees, 84 of 221 cases (38%) contain no control that the published mappings link to the finding. For those, the model cannot give an answer that agrees with AWS and SCF. Among cases with at most 10 gold controls, the share is 52%. Retrieval is the pipeline's main bottleneck on this data.
-- Embeddings beat word overlap: at k = 50, 62.0% against 46.2% for TF-IDF over the same texts (paired on the same cases: 53 cases only the embedding finds, 18 only TF-IDF finds; exact McNemar p ≈ 4e-5). At k = 10 it is 38.0% against 27.1% (40 vs 16, p ≈ 0.002). The 18 cases only TF-IDF finds suggest that a hybrid ranker could help; that has not been tried.
+- Embeddings beat word overlap: at k = 50, 62.0% against 46.2% for TF-IDF over the same texts (paired on the same cases: 53 cases only the embedding finds, 18 only TF-IDF finds; exact McNemar p ≈ 4e-5). At k = 10 it is 38.0% against 27.1% (40 vs 16, p ≈ 0.002). The 18 cases only TF-IDF finds suggested that a hybrid ranker could help; the comparison below tried it, and it does not help significantly.
 - Both are far above chance. Random ranking would already reach 22.8% at k = 50 because gold sets are large, which is why the random column is there.
 - With 221 cases, a hit rate near 62% has a 95% interval of roughly ±6 points.
 
@@ -137,5 +139,33 @@ The generated report is [`results.md`](results.md); per-case ranks (control ID, 
 - **Whether a suggestion is right.** The labels are transitive. A "miss" can be an SCF control that fits the finding but that SCF did not map to the same 800-53 requirement; 815 of the 1,591 SCF controls have no 800-53 entry at all and can never count as a hit. A "hit" can be a loose fit that happens to share a broad requirement.
 - **The model step.** No OpenRouter key was available, so the precision of the pipeline's suggestions is unmeasured.
 - **Today's Security Hub.** The control list and texts are the user guide as of March 2023. AWS has since added and renamed controls and changed mappings. The description is the guide's first paragraph, an approximation of the API's `Description` field.
-- **The exact production model.** The app runs the PyTorch model through sentence-transformers. This run used an ONNX export whose hash matches the one chromadb pins and which matches a second, independent export exactly, but it was not compared with the PyTorch model itself (Hugging Face was not reachable).
+- **The exact production model** is no longer a gap: the PyTorch rerun below gives identical results.
 - **Other inputs.** The inputs are short Security Hub control titles and descriptions, not live findings, policy text or scope documents.
+
+### The app's PyTorch model, 2026-09-28
+
+The ONNX run above was repeated with the model the app actually loads: `sentence-transformers/all-MiniLM-L6-v2` at Hugging Face revision `1110a243fdf4706b3f48f1d95db1a4f5529b4d41`, through sentence-transformers 6.1.0, transformers 5.10.4 and torch 2.13.0, run offline from the local model cache with a fresh embeddings cache. The gold set was rebuilt from the same pinned inputs (workbook sha256 `5a89bf2d…`, AWS docs commit `47bfe2f`; 251 controls, 221 cases).
+
+Every table is identical, and so is `per_case_retrieval.csv`: all 221 cases get the same first-gold rank from PyTorch as from the ONNX export. The only change in `results.md` is the embedding-model label, which now names sentence-transformers.
+
+### Retriever comparison, 2026-09-28
+
+Retrieval is the bottleneck, so the obvious fixes were tried on the same 221 cases: a larger embedding model, and reciprocal-rank fusion (RRF, k = 60, equal weights) of rankings that miss different cases. `scripts/compare_retrievers.py` checks every model archive against a pinned sha256, ranks all 1,591 controls with the same best-chunk scheme as `_semantic_filter`, and writes [`retriever_comparison.md`](retriever_comparison.md). The inputs were re-downloaded for this run and matched the hashes above; the app's MiniLM row reproduces the retrieval table exactly.
+
+| Retriever | Hit @10 | Hit @50 | Recall @50 | MRR @50 | Paired vs app @50 (gained / lost, p) |
+|---|---:|---:|---:|---:|---|
+| all-MiniLM-L6-v2 (the app, 22M parameters) | 38.0% | 62.0% | 21.7% | 0.188 | |
+| bge-small-en-v1.5 (33M) | 33.5% | 60.2% | 20.4% | 0.157 | +18 / −22, p = 0.64 |
+| bge-base-en-v1.5 (109M) | 37.6% | 67.9% | 19.5% | 0.204 | +30 / −17, p = 0.08 |
+| MiniLM + TF-IDF (RRF) | 33.5% | 64.3% | 17.6% | 0.195 | +18 / −13, p = 0.47 |
+| bge-base + TF-IDF (RRF) | 32.1% | 64.3% | 15.9% | 0.174 | +25 / −20, p = 0.55 |
+| MiniLM + bge-base (RRF) | 34.4% | 67.4% | 22.8% | 0.195 | +17 / −5, p = 0.017 |
+
+The bge models are Qdrant fastembed's ONNX exports (`fast-bge-small-en-v1.5.tar.gz`, sha256 `3858004b…`; `fast-bge-base-en-v1.5.tar.gz`, sha256 `b2e829f8…`), run with CLS pooling, 512-token truncation and bge's retrieval query prefix.
+
+**Reading it**
+
+- **No alternative is a clear improvement.** At k = 10 none beats the app's model. Fusing in TF-IDF, which the TF-IDF-only cases suggested, lowers hit rate at k = 10 and gains nothing significant at k = 50.
+- **The one p below 0.05 does not survive the search that found it.** MiniLM + bge-base was the best of six alternatives, all chosen and scored on these same cases. With a Bonferroni correction for six comparisons the threshold is 0.008. It would also run two embedding models on every input.
+- **bge-base trades recall for hit rate.** It puts one gold control in the shortlist more often (p = 0.08), but finds fewer gold controls per case, at five times the parameters.
+- **So the app keeps MiniLM**, and the remaining misses point to the input and the labels more than to the model: short, generic Security Hub descriptions, and 815 SCF controls without an 800-53 entry that can never count as a hit. A held-out case set would be needed before adopting any of the variants above.

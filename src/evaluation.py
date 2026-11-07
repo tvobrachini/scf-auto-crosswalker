@@ -21,7 +21,7 @@ import math
 import re
 import statistics
 from collections.abc import Callable, Iterable, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 import numpy as np
 
@@ -418,34 +418,68 @@ def write_per_case_csv(
 
 
 @dataclass
+class Suggestion:
+    """What the pipeline returned for one input: the IDs it suggested and the
+    IDs the model gave that validation rejected (not in SCF or not a candidate)."""
+
+    ids: list[str]
+    rejected: list[str] = field(default_factory=list)
+
+
+@dataclass
+class ModelCase:
+    case_id: str
+    suggested: list[str]
+    rejected: list[str]
+    correct: int
+    failed: bool = False
+    error: str = ""  # exception class and message when the call failed
+
+
+@dataclass
 class ModelScores:
     cases: int
     precision: float  # share of suggested controls that are gold
     hit_rate: float  # share of cases with at least one gold suggestion
     empty: int  # cases with no suggestion (nothing returned, or all rejected)
     errors: int = 0  # cases where the call failed (after retries)
+    rejected: int = 0  # IDs the model returned that validation dropped
+    cases_with_rejections: int = 0
+    per_case: list[ModelCase] = field(default_factory=list, repr=False)
 
 
 def score_model(
-    cases: list[GoldCase], suggest: Callable[[str], list[str]]
+    cases: list[GoldCase], suggest: Callable[[str], "list[str] | Suggestion"]
 ) -> ModelScores:
     """
-    Score `suggest(text) -> suggested control IDs` (the full pipeline).
+    Score `suggest(text)` (the full pipeline), which returns the suggested
+    control IDs, or a Suggestion that also carries the rejected IDs.
 
     A failed call is counted in `errors` and does not stop the run; errors
     and empty answers both count as misses in `hit_rate`.
     """
     suggested_total, correct_total, hits, empty, errors = 0, 0, 0, 0, 0
+    rejected_total, cases_with_rejections = 0, 0
+    per_case = []
     for c in cases:
         try:
-            ids = suggest(c.text)
-        except Exception:  # one failing case must not lose the whole run
+            answer = suggest(c.text)
+        except Exception as e:  # one failing case must not lose the whole run
             errors += 1
+            error = f"{type(e).__name__}: {e}"[:300]
+            per_case.append(ModelCase(c.case_id, [], [], 0, failed=True, error=error))
             continue
+        if isinstance(answer, Suggestion):
+            ids, rejected = answer.ids, answer.rejected
+        else:
+            ids, rejected = answer, []
+        rejected_total += len(rejected)
+        cases_with_rejections += bool(rejected)
+        correct = len(set(ids) & c.gold)
+        per_case.append(ModelCase(c.case_id, list(ids), list(rejected), correct))
         if not ids:
             empty += 1
             continue
-        correct = len(set(ids) & c.gold)
         suggested_total += len(ids)
         correct_total += correct
         hits += correct > 0
@@ -456,7 +490,51 @@ def score_model(
         hit_rate=hits / n,
         empty=empty,
         errors=errors,
+        rejected=rejected_total,
+        cases_with_rejections=cases_with_rejections,
+        per_case=per_case,
     )
+
+
+def error_summary(scores: ModelScores) -> list[tuple[int, str]]:
+    """
+    Failed calls grouped by error, most frequent first, as (count, sample).
+    URLs are removed (OpenRouter's point to the account's key settings) and
+    numbers are ignored when grouping, so one cause is reported once.
+    """
+    groups: dict[str, list[str]] = {}
+    for m in scores.per_case:
+        if m.failed:
+            message = re.sub(r"https?://\S+", "<url>", m.error)
+            groups.setdefault(re.sub(r"\d+", "N", message), []).append(message)
+    return sorted(((len(v), v[0]) for v in groups.values()), key=lambda item: -item[0])
+
+
+def write_per_case_model_csv(path: str, scores: ModelScores) -> None:
+    """One row per case, IDs and counts only, so the file can be committed."""
+    with open(path, "w", encoding="utf-8", newline="") as f:
+        writer = csv.writer(f)
+        writer.writerow(
+            [
+                "case_id",
+                "suggested",
+                "n_gold_suggested",
+                "rejected",
+                "call_failed",
+                "error_type",
+            ]
+        )
+        for m in scores.per_case:
+            writer.writerow(
+                [
+                    m.case_id,
+                    " ".join(m.suggested),
+                    m.correct,
+                    " ".join(m.rejected),
+                    int(m.failed),
+                    m.error.split(":", 1)[0],
+                ]
+            )
 
 
 def results_markdown(
@@ -479,10 +557,21 @@ def results_markdown(
         lines.append(f"| Retrieval | MRR @{s.k} | {s.mrr:.3f} |")
     if model is not None:
         label = f"Model ({llm_name})" if llm_name else "Model"
+        if model.errors:
+            lines.insert(
+                0,
+                f"**{model.errors} of {model.cases} model calls failed; the model "
+                "figures below count them as misses and are not a valid "
+                "measurement.**\n",
+            )
         lines.append(f"| {label} | Precision of suggestions | {model.precision:.1%} |")
         lines.append(
             f"| {label} | Hit rate (≥1 gold suggestion) | {model.hit_rate:.1%} |"
         )
         lines.append(f"| {label} | Cases with no suggestion | {model.empty} |")
         lines.append(f"| {label} | Cases where the call failed | {model.errors} |")
+        lines.append(f"| {label} | IDs rejected by validation | {model.rejected} |")
+        lines.append(
+            f"| {label} | Cases with a rejected ID | {model.cases_with_rejections} |"
+        )
     return "\n".join(lines) + "\n"
