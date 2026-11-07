@@ -241,11 +241,19 @@ def main(argv: list[str] | None = None) -> int:
         if args.openrouter_model:
             api_key = os.environ.get("OPENROUTER_API_KEY")
             if not api_key:
-                print("OPENROUTER_API_KEY is not set; skipping the model step.")
+                print(
+                    "OPENROUTER_API_KEY is not set, but --llm was requested.",
+                    file=sys.stderr,
+                )
+                return 1
             else:
                 llm_name, suggest = use_openrouter_model(args.openrouter_model, api_key)
         elif not os.environ.get("OPENROUTER_API_KEY"):
-            print("OPENROUTER_API_KEY is not set; skipping the model step.")
+            print(
+                "OPENROUTER_API_KEY is not set, but --llm was requested.",
+                file=sys.stderr,
+            )
+            return 1
         else:
             llm_name = os.environ.get("OPENROUTER_MODEL", DEFAULT_OPENROUTER_MODEL)
 

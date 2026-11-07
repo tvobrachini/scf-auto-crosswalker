@@ -210,6 +210,10 @@ def test_run_eval_cli_end_to_end(monkeypatch, tmp_path, fake_embeddings):
 
     assert run_eval.main(["--controls", str(controls), "--column", "Typo"]) == 1
 
+    # --llm without a key must fail, not quietly produce retrieval-only results.
+    monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
+    assert run_eval.main(["--controls", str(controls), "--llm"]) == 1
+
     # --onnx-model swaps in the ONNX encoder and its own embeddings cache file.
     import onnx_encoder
 
@@ -263,9 +267,9 @@ def test_run_eval_cli_openrouter_model(monkeypatch, tmp_path, fake_embeddings):
     )
 
     monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
-    assert run_eval.main(["--gold", str(gold), "--llm", "--openrouter-model", "m"]) == 0
-    results = (tmp_path / "results.md").read_text()
-    assert "| Model" not in results  # skipped: no OPENROUTER_API_KEY
+    # Asking for the model step without a key fails instead of skipping it.
+    assert run_eval.main(["--gold", str(gold), "--llm", "--openrouter-model", "m"]) == 1
+    assert not (tmp_path / "results.md").exists()
 
     def fake_use_openrouter_model(model_name, api_key):
         assert model_name == "openrouter/some-model"
