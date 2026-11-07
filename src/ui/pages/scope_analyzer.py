@@ -6,7 +6,7 @@ import pandas as pd
 import streamlit as st
 
 from exports import to_safe_csv
-from mapper import analyze_audit_scope, load_scf_database
+from mapper import analyze_audit_scope, load_scf_database, scf_database_problem
 from ui.common import (
     MAX_PDF_PAGES,
     Labels,
@@ -29,7 +29,7 @@ def render(labels: Labels, lab_data_dir: str) -> None:
 
     scf_db = load_scf_database()
     if not scf_db:
-        st.error("SCF database not found. Please download it using the sidebar.")
+        st.error(scf_database_problem())
         return
 
     tab_text, tab_file = st.tabs(
