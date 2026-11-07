@@ -37,7 +37,10 @@ def to_safe_csv(df: pd.DataFrame, demo: bool | None = None) -> bytes:
     if demo:
         safe.insert(0, DEMO_COLUMN, DEMO_NOTICE)
     for col in safe.columns:
-        if safe[col].dtype == object:
+        # pandas 3 stores text as the "str" dtype, not object; check both.
+        if pd.api.types.is_object_dtype(safe[col]) or pd.api.types.is_string_dtype(
+            safe[col]
+        ):
             safe[col] = safe[col].map(_neutralize)
     return safe.to_csv(index=False).encode("utf-8")
 

@@ -39,6 +39,12 @@ def test_csv_neutralizes_formulas():
     assert [r[1] for r in rows[1:]] == ["1", "2", "3", "4", "5", "6"]
 
 
+def test_csv_neutralizes_formulas_in_string_dtype_columns():
+    df = pd.DataFrame({"a": pd.Series(["=1+1", "ok"], dtype="string")})
+    rows = list(csv.reader(io.StringIO(to_safe_csv(df, demo=False).decode("utf-8"))))
+    assert [r[0] for r in rows[1:]] == ["'=1+1", "ok"]
+
+
 def test_oscal_groups_sources_and_merges_duplicates():
     results = [
         _result("Finding 1", "CloudFront.3", ("CRY-03", 70)),
