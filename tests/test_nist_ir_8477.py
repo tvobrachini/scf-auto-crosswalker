@@ -98,6 +98,43 @@ def test_validate_mapping_result_preserves_and_trims_quotes():
     assert m.domain == "Cryptographic Protections"
 
 
+def test_validate_mapping_result_blanks_quotes_that_are_not_verbatim():
+    raw_result = MappingResult(
+        mappings=[
+            MappedControl(
+                control_id="CRY-01",
+                confidence=90,
+                source_quote="must  use TLS 1.3",
+                control_quote="Encrypt everything with quantum keys",
+                justification="x",
+            ),
+            MappedControl(
+                control_id="CRY-02",
+                confidence=80,
+                source_quote="invented clause",
+                control_quote="Enforce TLS",
+                justification="x",
+            ),
+        ]
+    )
+    allowed = {
+        "CRY-01": {"description": "Enforce TLS 1.3 for all traffic"},
+        "CRY-02": {"description": "Enforce TLS 1.3 for all traffic"},
+    }
+    validated = _validate_mapping_result(
+        raw_result, allowed, source_text="The app Must use TLS 1.3 always."
+    )
+    a, b = validated.mappings
+    assert a.source_quote == "must  use TLS 1.3"  # whitespace/case tolerant
+    assert a.control_quote == ""
+    assert b.source_quote == ""
+    assert b.control_quote == "Enforce TLS"
+    assert validated.unverified_quotes == [
+        "CRY-01:control",
+        "CRY-02:source",
+    ]
+
+
 def test_oscal_export_encodes_nist_ir_8477_and_quotes():
     """OSCAL mapping-collection translates NIST IR 8477 relationships and includes quotes in remarks."""
     results = [
