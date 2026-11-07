@@ -236,6 +236,20 @@ def _parse(tmp_path, monkeypatch, rows, columns=COLUMNS):
     return ok, records
 
 
+def test_parse_scf_records_how_many_controls_it_skipped(tmp_path, monkeypatch):
+    import fetch_scf as fetch_scf_module
+
+    rows = [
+        ["Governance", "GOV-01", "Run a program.", 1, None, None, None, None, None],
+        ["Governance", "BAD ID", "Invalid id.", 5, None, None, None, None, None],
+    ]
+    ok, records = _parse(tmp_path, monkeypatch, rows)
+    assert ok is True and len(records) == 1
+    meta = str(tmp_path / "scf_meta.json")
+    assert fetch_scf_module.read_scf_skipped(meta) == 1
+    assert fetch_scf_module.read_scf_skipped(str(tmp_path / "nope.json")) == 0
+
+
 def test_parse_scf_extracts_records(tmp_path, monkeypatch):
     rows = [
         [
