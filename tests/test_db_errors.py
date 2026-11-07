@@ -43,3 +43,22 @@ def test_embeddings_cache_write_failure_is_not_fatal(tmp_path, monkeypatch):
     mapper._embeddings_memo.clear()
     data = [{"control_id": "GOV-01", "domain": "G", "description": "Run a program."}]
     assert mapper._build_or_load_embeddings(data).shape == (1, 3)
+
+
+def test_empty_database_has_its_own_message(tmp_path, monkeypatch):
+    empty = tmp_path / "scf_parsed.json"
+    empty.write_text("[]")
+    monkeypatch.setattr(mapper, "PARSED_JSON_FILE", str(empty))
+    assert mapper.load_scf_database() == []
+    assert "empty" in mapper.scf_database_problem()
+
+
+def test_problem_follows_the_file_not_the_last_load(tmp_path, monkeypatch):
+    # No module state: a corrupt-file load in one session must not change the
+    # message another session gets once the file is gone.
+    bad = tmp_path / "scf_parsed.json"
+    bad.write_text("{not json")
+    monkeypatch.setattr(mapper, "PARSED_JSON_FILE", str(bad))
+    mapper.load_scf_database()
+    bad.unlink()
+    assert "not found" in mapper.scf_database_problem()
