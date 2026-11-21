@@ -32,6 +32,11 @@ dependencies = [
 Repository = "https://github.com/tvobrachini/scf-auto-crosswalker"
 Issues = "https://github.com/tvobrachini/scf-auto-crosswalker/issues"
 
+[tool.ruff.lint]
+# Explicit so a newer ruff cannot silently widen the default rule set.
+# Matches ruff's classic defaults used by pre-commit in CI.
+select = ["E4", "E7", "E9", "F"]
+
 [tool.bandit]
 exclude_dirs = ["tests", ".venv"]
 skips = ["B101"] # Skip assert usage only; B105 re-enabled to detect real hardcoded secrets
